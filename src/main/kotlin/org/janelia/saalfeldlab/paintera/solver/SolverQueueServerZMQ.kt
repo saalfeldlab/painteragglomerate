@@ -30,6 +30,18 @@ class SolverQueueServerZMQ(
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
+        fun deserialize(jsonString : String, gson : Gson) : List<AssignmentAction>
+        {
+            val json = gson.fromJson(jsonString, JsonObject::class.java)
+            val actions = ArrayList<AssignmentAction>()
+            for ( el in json.get("actions").asJsonArray )
+            {
+                actions.add(gson.fromJson(el, AssignmentAction::class.java))
+            }
+
+            return actions
+        }
+
         private class ReceiveAction(val gson: Gson, val actionReceiverSocket: ZMQ.Socket) : Supplier<Iterable<AssignmentAction>>
         {
             override fun get(): Iterable<AssignmentAction> {
@@ -41,13 +53,7 @@ class SolverQueueServerZMQ(
                     return ArrayList<AssignmentAction>()
 
                 try {
-                    val json = gson.fromJson(message, JsonObject::class.java)
-                    val actions = ArrayList<AssignmentAction>()
-                    for ( el in json.get("actions").asJsonArray )
-                    {
-                        actions.add(gson.fromJson(el, AssignmentAction::class.java))
-                    }
-
+                    val actions = deserialize(message, gson)
 
                     LOG.debug("RETURNING THESE ACTIONS: {}", actions)
                     return actions
@@ -119,9 +125,9 @@ class SolverQueueServerZMQ(
             }
         }
 
-        private fun makeJavaRunnable(f: () -> Unit): Runnable = object : Runnable {override fun run() {f()}}
+        public fun makeJavaRunnable(f: () -> Unit): Runnable = object : Runnable {override fun run() {f()}}
 
-        private fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = object : Supplier<T> {override fun get() : T {return f()}}
+        public fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = object : Supplier<T> {override fun get() : T {return f()}}
     }
 
     private val ctx: ZMQ.Context
