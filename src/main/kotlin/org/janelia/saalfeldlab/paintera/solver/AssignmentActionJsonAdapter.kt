@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.paintera.org.janelia.saalfeldlab.paintera.solver
+package org.janelia.saalfeldlab.paintera.solver
 
 import com.google.gson.*
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction

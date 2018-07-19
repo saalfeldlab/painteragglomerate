@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.paintera.org.janelia.saalfeldlab.paintera.solver
+package org.janelia.saalfeldlab.paintera.solver
 
 import gnu.trove.map.hash.TLongLongHashMap
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction

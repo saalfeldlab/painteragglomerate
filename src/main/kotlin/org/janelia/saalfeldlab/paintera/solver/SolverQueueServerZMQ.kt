@@ -1,4 +1,4 @@
-package org.janelia.saalfeldlab.paintera.org.janelia.saalfeldlab.paintera.solver
+package org.janelia.saalfeldlab.paintera.solver
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -154,7 +154,7 @@ class SolverQueueServerZMQ(
 
         val solutionRequester = SolutionRequest(gson, solutionRequestResponseSocket)
 
-        val solutionReceiver =  ReceiveSolution(solutionRequestResponseSocket)
+        val solutionReceiver = ReceiveSolution(solutionRequestResponseSocket)
 
         this.solutionDistributionSocket = ctx.socket(ZMQ.PUB)
         this.solutionDistributionSocket.bind(solutionDistributionAddress)
