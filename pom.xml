@@ -102,6 +102,11 @@
 			<artifactId>picocli</artifactId>
 			<version>3.0.0-beta-2</version>
 		</dependency>
+        <dependency>
+            <groupId>org.zeromq</groupId>
+            <artifactId>jzmq</artifactId>
+            <version>3.1.0</version>
+        </dependency>
 
         <!-- This is only for exclusion -->
         <dependency>
