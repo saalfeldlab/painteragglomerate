@@ -43,7 +43,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
         fetchAndApplySolution()
         stateChanged()
-        receiveThread.scheduleAtFixedRate({
+        receiveThread.scheduleWithFixedDelay({
             fetchAndApplySolution()
             synchronized(this) {
                 history.removeAll(submittedActions)

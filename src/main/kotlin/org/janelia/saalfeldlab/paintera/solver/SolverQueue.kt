@@ -50,7 +50,7 @@ class SolverQueue(
 
         this.latestSolution = initialSolution.get()
 
-        actionReceiverService.scheduleAtFixedRate(
+        actionReceiverService.scheduleWithFixedDelay(
             {
                 LOG.debug("Waiting for action in queue!")
                 val actions = actionReceiver.get()
@@ -67,7 +67,7 @@ class SolverQueue(
                 SCHEDULING_PERIOD_UNIT
             )
 
-        solutionHandlerService.scheduleAtFixedRate({
+        solutionHandlerService.scheduleWithFixedDelay({
                 var sentRequest = false
             LOG.debug("checking if a request was sent {}", sentRequest)
                 synchronized(this.queue) {
@@ -95,7 +95,7 @@ class SolverQueue(
         }, 0, 100, TimeUnit.MILLISECONDS )
 
 
-        currentSolutionProviderSerivce.scheduleAtFixedRate({
+        currentSolutionProviderSerivce.scheduleWithFixedDelay({
             LOG.warn("Waiting for solution request")
             val empty = currentSolutionRequest.get()
             LOG.warn("Empty request: ", empty)
