@@ -108,17 +108,9 @@
             <version>3.1.0</version>
         </dependency>
 
-        <!-- This is only for exclusion -->
-        <dependency>
-			<groupId>org.clapper</groupId>
-			<artifactId>javautil</artifactId>
-			<version>3.2.0</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.slf4j</groupId>
-					<artifactId>slf4j-jdk14</artifactId>
-				</exclusion>
-			</exclusions>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-simple</artifactId>
 		</dependency>
 
 		<!--test-->
