@@ -24,6 +24,14 @@ class SolverQueue(
         currentSolutionResponse: Consumer<TLongLongHashMap>,
         minWaitTimeAfterLastAction: Long) {
 
+    companion object {
+        private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
+
+        private val SCHEDULING_PERIOD : Long = 10
+
+        private val SCHEDULING_PERIOD_UNIT = TimeUnit.MILLISECONDS
+    }
+
     private val queue = ArrayList<AssignmentAction>()
 
     private val timeOfLastAction = AtomicLong(0)
@@ -55,8 +63,8 @@ class SolverQueue(
                     }
                },
                 0,
-                0,
-                TimeUnit.MILLISECONDS
+                SCHEDULING_PERIOD,
+                SCHEDULING_PERIOD_UNIT
             )
 
         solutionHandlerService.scheduleAtFixedRate({
@@ -90,7 +98,10 @@ class SolverQueue(
             val empty = currentSolutionRequest.get()
             val currentSolution : TLongLongHashMap = getCurrentSolution()
             currentSolutionResponse.accept(currentSolution)
-        }, 0, 0, TimeUnit.MILLISECONDS)
+        },
+                0,
+                SCHEDULING_PERIOD,
+                SCHEDULING_PERIOD_UNIT )
 
     }
 
@@ -100,10 +111,6 @@ class SolverQueue(
         {
             return TLongLongHashMap(this.latestSolution)
         }
-    }
-
-    companion object {
-        private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
     }
 
     fun forceStop()
