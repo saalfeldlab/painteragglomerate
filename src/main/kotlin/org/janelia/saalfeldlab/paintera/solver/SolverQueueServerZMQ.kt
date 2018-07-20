@@ -121,6 +121,7 @@ class SolverQueueServerZMQ(
         private class DistributeSolution(val solutionDistributionSocket : ZMQ.Socket ) : Consumer<TLongLongHashMap>
         {
             override fun accept(solution: TLongLongHashMap) {
+                LOG.debug("Sending solution: {}", solution)
                 this.solutionDistributionSocket.send(toBytes(solution), 0)
             }
         }
@@ -170,11 +171,17 @@ class SolverQueueServerZMQ(
         this.latestSolutionRequestSocket = ctx.socket(ZMQ.REP)
         this.latestSolutionRequestSocket.bind(latestSolutionRequestAddress)
 
-        val currentSolutionRequest = {
-            this.latestSolutionRequestSocket.recv(0)
-            null as Void
+        val currentSolutionRequest = Supplier {
+            LOG.warn("Receiving solution request")
+            val request = this.latestSolutionRequestSocket.recv(0)
+            LOG.warn("Received request: {}", request)
+            try {
+                null as Void
+            }
+            finally {
+                LOG.warn("Returned null as Void")
+            }
         }
-
         val currentSolutionResponse = DistributeSolution(latestSolutionRequestSocket)
 
         this.queue = SolverQueue(
@@ -184,7 +191,7 @@ class SolverQueueServerZMQ(
                 solutionReceiver,
                 solutionDistributor,
                 initialSolution,
-                makeJavaSupplier(currentSolutionRequest),
+                currentSolutionRequest,
                 currentSolutionResponse,
                 minWaitTimeAfterLastAction)
     }

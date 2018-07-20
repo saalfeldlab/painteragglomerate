@@ -69,6 +69,7 @@ class SolverQueue(
 
         solutionHandlerService.scheduleAtFixedRate({
                 var sentRequest = false
+            LOG.debug("checking if a request was sent {}", sentRequest)
                 synchronized(this.queue) {
                     val currentTime = System.currentTimeMillis()
                     val timeDiff = currentTime - timeOfLastAction.get()
@@ -91,12 +92,15 @@ class SolverQueue(
                         }
                     }
                 }
-        }, 0, 10, TimeUnit.MILLISECONDS )
+        }, 0, 100, TimeUnit.MILLISECONDS )
 
 
         currentSolutionProviderSerivce.scheduleAtFixedRate({
+            LOG.warn("Waiting for solution request")
             val empty = currentSolutionRequest.get()
+            LOG.warn("Empty request: ", empty)
             val currentSolution : TLongLongHashMap = getCurrentSolution()
+            LOG.warn("Going to distribute current solution: ", currentSolution)
             currentSolutionResponse.accept(currentSolution)
         },
                 0,

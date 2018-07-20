@@ -10,19 +10,46 @@ import org.janelia.saalfeldlab.paintera.control.assignment.action.Detach
 import org.janelia.saalfeldlab.paintera.control.assignment.action.Merge
 import org.junit.Assert
 import org.junit.Test
+import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import java.io.IOException
+import java.lang.invoke.MethodHandles
 import java.nio.ByteBuffer
 import java.util.*
 
 class SolverQueueServerZMQTest {
 
+
+
+    companion object {
+
+        private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
+
+        private val ACTION_ADDRESS = "ipc://ACTION"
+
+        private val SOLUTION_REQ_REP = "ipc://SOL_REQ_REP"
+
+        private val SOLUTION_DIST = "ipc://SOL_DIST"
+
+        private val LATEST_SOL_ADDR = "ipc://LATEST_SOL"
+
+        private val MIN_WAIT_AFTER_LAST_ACTION = 100
+
+        private val INITIAL_SOLUTION = { TLongLongHashMap(longArrayOf(4), longArrayOf(2)) }
+
+        private val gson: Gson = GsonBuilder()
+                .registerTypeAdapter(AssignmentAction::class.java, AssignmentActionJsonAdapter())
+                .create()
+    }
+
     @Test
     @Throws(InterruptedException::class, IOException::class)
     fun test() {
         val solution = INITIAL_SOLUTION()
+        LOG.debug("Got initial solution {}", solution)
 
         val solutionHandlerThread = Thread {
+            Thread.currentThread().name = "solution-handler"
             val actions = ArrayList<AssignmentAction>()
 
             val ctx = ZMQ.context(1)
@@ -31,7 +58,9 @@ class SolverQueueServerZMQTest {
 
             while (!Thread.interrupted()) {
 
+                LOG.warn("Waiting for message in thread {}", Thread.currentThread().name)
                 val msg = socket.recvStr()
+                LOG.warn("Received message in thread {}", Thread.currentThread().name)
                 //				System.out.println( "RECEIVED MSG " + msg );
 
                 val incomingActions = SolverQueueServerZMQ.deserialize(msg, gson)
@@ -104,17 +133,22 @@ class SolverQueueServerZMQTest {
                 LATEST_SOL_ADDR,
                 1,
                 MIN_WAIT_AFTER_LAST_ACTION.toLong())
+        LOG.warn("Started server")
 
         val ctx = ZMQ.context(1)
         val currentSolutionSocket = ctx.socket(ZMQ.REQ)
         currentSolutionSocket.connect(LATEST_SOL_ADDR)
+        LOG.warn("Sending empty message")
         currentSolutionSocket.send("")
+        LOG.warn("Sent empty message")
         val solutionResponse = currentSolutionSocket.recv()
+        LOG.warn("Received solution={}", solutionResponse)
 
         Assert.assertNotNull(solutionResponse)
         Assert.assertEquals(0, solutionResponse.size % (2 * java.lang.Long.BYTES))
 
         val init = INITIAL_SOLUTION()
+        LOG.warn("init={}", init)
 
         val responseHM = TLongLongHashMap()
 
@@ -194,25 +228,6 @@ class SolverQueueServerZMQTest {
         Assert.assertEquals(solutionReference, solutionNormalized)
         Assert.assertEquals(solutionReference, solutionSubscription)
 
-    }
-
-    companion object {
-
-        private val ACTION_ADDRESS = "ipc://ACTION"
-
-        private val SOLUTION_REQ_REP = "ipc://SOL_REQ_REP"
-
-        private val SOLUTION_DIST = "ipc://SOL_DIST"
-
-        private val LATEST_SOL_ADDR = "ipc://LATEST_SOL"
-
-        private val MIN_WAIT_AFTER_LAST_ACTION = 100
-
-        private val INITIAL_SOLUTION = { TLongLongHashMap(longArrayOf(4), longArrayOf(2)) }
-
-        private val gson: Gson = GsonBuilder()
-                .registerTypeAdapter(AssignmentAction::class.java, AssignmentActionJsonAdapter())
-                .create()
     }
 
 }
