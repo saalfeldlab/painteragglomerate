@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.paintera.solver
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
+import com.google.gson.JsonArray
 import com.google.gson.JsonObject
 import gnu.trove.list.array.TLongArrayList
 import gnu.trove.map.hash.TLongLongHashMap
@@ -168,7 +169,10 @@ class SolverQueueServerZMQTest {
         subscriptionSocket.subscribe("".toByteArray())
         val solutionSubscription = TLongLongHashMap()
         val solutionSubscriptionThread = Thread {
+            Thread.currentThread().name = "solutionSubscriptionThread"
+            LOG.warn("Waiting for message")
             val msg = subscriptionSocket.recv()
+            LOG.warn("Received message ${msg}")
             Assert.assertEquals(0, msg.size % (2 * java.lang.Long.BYTES))
             solutionSubscription.clear()
             val bb = ByteBuffer.wrap(msg)
@@ -186,24 +190,36 @@ class SolverQueueServerZMQTest {
         testActions.add(Merge(3, 2, 2))
         testActions.add(Detach(5, 1))
         testActions.add(Detach(3, 1))
+        val testActionsJsonArray = JsonArray()
+        for ( ta in testActions )
+        {
+            testActionsJsonArray.add(gson.toJsonTree(ta, AssignmentAction::class.java))
+        }
 
         val jsonObject = JsonObject()
-        jsonObject.add("actions", gson.toJsonTree(testActions))
+        jsonObject.add("actions", testActionsJsonArray)
         jsonObject.addProperty("version", "1")
 
         actionSocket.send(jsonObject.toString())
         val response = actionSocket.recv()
+        LOG.warn("Received response from actionSocket {}", response)
         Assert.assertEquals(1, response.size)
-        Assert.assertEquals(0, response[0])
+        Assert.assertEquals(0, response[0].toInt())
         Thread.sleep(300)
 
+        LOG.warn("Joining solutionSubscriptionThread")
         solutionSubscriptionThread.join()
 
+        LOG.warn("Closing actionSocket")
         actionSocket.close()
 
+        LOG.warn("Closing subscriptionSocket")
         subscriptionSocket.close()
 
+        LOG.warn("Closing context")
         ctx.close()
+
+        LOG.warn("Interrupting solutionHandlerThread")
         solutionHandlerThread.interrupt()
 
         val solutionNormalized = TLongLongHashMap()

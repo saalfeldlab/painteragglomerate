@@ -1,9 +1,6 @@
 package org.janelia.saalfeldlab.paintera.solver
 
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import com.google.gson.JsonObject
-import com.google.gson.JsonParseException
+import com.google.gson.*
 import gnu.trove.map.TLongLongMap
 import gnu.trove.map.hash.TLongLongHashMap
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction
@@ -34,8 +31,11 @@ class SolverQueueServerZMQ(
         {
             val json = gson.fromJson(jsonString, JsonObject::class.java)
             val actions = ArrayList<AssignmentAction>()
-            for ( el in json.get("actions").asJsonArray )
+            val actionsArray = json.get("actions")
+            LOG.warn("Found actions array {}", actionsArray)
+            for ( el in actionsArray.asJsonArray )
             {
+                LOG.warn("Deserializing action element {}", el)
                 actions.add(gson.fromJson(el, AssignmentAction::class.java))
             }
 
@@ -45,9 +45,9 @@ class SolverQueueServerZMQ(
         private class ReceiveAction(val gson: Gson, val actionReceiverSocket: ZMQ.Socket) : Supplier<Iterable<AssignmentAction>>
         {
             override fun get(): Iterable<AssignmentAction> {
-                LOG.debug("WAITING FOR MESSAGE IN ACTION RECEIVER at socket! {}", actionReceiverSocket)
+                LOG.warn("WAITING FOR MESSAGE IN ACTION RECEIVER at socket! {}", actionReceiverSocket)
                 val message = this.actionReceiverSocket.recvStr(0, Charset.defaultCharset())
-                LOG.debug("RECEIVED THE FOLLOWING MESSAGE: {}", message)
+                LOG.warn("RECEIVED THE FOLLOWING MESSAGE: {}", message)
 
                 if (message == null)
                     return ArrayList<AssignmentAction>()
@@ -55,10 +55,14 @@ class SolverQueueServerZMQ(
                 try {
                     val actions = deserialize(message, gson)
 
-                    LOG.debug("RETURNING THESE ACTIONS: {}", actions)
+                    LOG.warn("RETURNING THESE ACTIONS: {}", actions)
                     return actions
                 } catch (e: JsonParseException) {
+                    LOG.warn("Error in parsing message {}: {}", message, e)
                     return ArrayList<AssignmentAction>()
+                }
+                finally{
+                    LOG.warn("Returned from {}.get()", this.javaClass.name)
                 }
             }
 
@@ -72,7 +76,12 @@ class SolverQueueServerZMQ(
             override fun accept(actions: Collection<AssignmentAction>) {
 
                 val json = JsonObject()
-                json.addProperty("actions", gson.toJson(actions))
+                val jsonActions = JsonArray()
+                for ( ta in actions )
+                {
+                    jsonActions.add(gson.toJsonTree(ta, AssignmentAction::class.java))
+                }
+                json.add("actions", jsonActions)
                 this.solutionRequestResponseSocket.send(json.toString())
             }
         }
@@ -121,8 +130,9 @@ class SolverQueueServerZMQ(
         private class DistributeSolution(val solutionDistributionSocket : ZMQ.Socket ) : Consumer<TLongLongHashMap>
         {
             override fun accept(solution: TLongLongHashMap) {
-                LOG.debug("Sending solution: {}", solution)
+                LOG.warn("Sending solution: {}", solution)
                 this.solutionDistributionSocket.send(toBytes(solution), 0)
+                LOG.warn("Sent solution: {}", solution)
             }
         }
 
