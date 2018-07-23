@@ -32,10 +32,10 @@ class SolverQueueServerZMQ(
             val json = gson.fromJson(jsonString, JsonObject::class.java)
             val actions = ArrayList<AssignmentAction>()
             val actionsArray = json.get("actions")
-            LOG.warn("Found actions array {}", actionsArray)
+            LOG.debug("Found actions array {}", actionsArray)
             for ( el in actionsArray.asJsonArray )
             {
-                LOG.warn("Deserializing action element {}", el)
+                LOG.debug("Deserializing action element {}", el)
                 actions.add(gson.fromJson(el, AssignmentAction::class.java))
             }
 
@@ -45,9 +45,9 @@ class SolverQueueServerZMQ(
         private class ReceiveAction(val gson: Gson, val actionReceiverSocket: ZMQ.Socket) : Supplier<Iterable<AssignmentAction>>
         {
             override fun get(): Iterable<AssignmentAction> {
-                LOG.warn("WAITING FOR MESSAGE IN ACTION RECEIVER at socket! {}", actionReceiverSocket)
+                LOG.debug("WAITING FOR MESSAGE IN ACTION RECEIVER at socket! {}", actionReceiverSocket)
                 val message = this.actionReceiverSocket.recvStr(0, Charset.defaultCharset())
-                LOG.warn("RECEIVED THE FOLLOWING MESSAGE: {}", message)
+                LOG.debug("RECEIVED THE FOLLOWING MESSAGE: {}", message)
 
                 if (message == null)
                     return ArrayList<AssignmentAction>()
@@ -55,14 +55,14 @@ class SolverQueueServerZMQ(
                 try {
                     val actions = deserialize(message, gson)
 
-                    LOG.warn("RETURNING THESE ACTIONS: {}", actions)
+                    LOG.debug("RETURNING THESE ACTIONS: {}", actions)
                     return actions
                 } catch (e: JsonParseException) {
-                    LOG.warn("Error in parsing message {}: {}", message, e)
+                    LOG.debug("Error in parsing message {}: {}", message, e)
                     return ArrayList<AssignmentAction>()
                 }
                 finally{
-                    LOG.warn("Returned from {}.get()", this.javaClass.name)
+                    LOG.debug("Returned from {}.get()", this.javaClass.name)
                 }
             }
 
@@ -130,9 +130,9 @@ class SolverQueueServerZMQ(
         private class DistributeSolution(val solutionDistributionSocket : ZMQ.Socket ) : Consumer<TLongLongHashMap>
         {
             override fun accept(solution: TLongLongHashMap) {
-                LOG.warn("Sending solution: {}", solution)
+                LOG.debug("Sending solution: {}", solution)
                 this.solutionDistributionSocket.send(toBytes(solution), 0)
-                LOG.warn("Sent solution: {}", solution)
+                LOG.debug("Sent solution: {}", solution)
             }
         }
 
@@ -182,14 +182,14 @@ class SolverQueueServerZMQ(
         this.latestSolutionRequestSocket.bind(latestSolutionRequestAddress)
 
         val currentSolutionRequest = Supplier {
-            LOG.warn("Receiving solution request")
+            LOG.debug("Receiving solution request")
             val request = this.latestSolutionRequestSocket.recv(0)
-            LOG.warn("Received request: {}", request)
+            LOG.debug("Received request: {}", request)
             try {
                 null as? Void
             }
             finally {
-                LOG.warn("Returned null as Void")
+                LOG.debug("Returned null as Void")
             }
         }
         val currentSolutionResponse = DistributeSolution(latestSolutionRequestSocket)
