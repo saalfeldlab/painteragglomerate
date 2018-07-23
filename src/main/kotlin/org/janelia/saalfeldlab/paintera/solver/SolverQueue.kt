@@ -20,7 +20,7 @@ class SolverQueue(
         solutionReceiver: Supplier<TLongLongHashMap>,
         solutionDistributor: Consumer<TLongLongHashMap>,
         initialSolution: Supplier<TLongLongHashMap>,
-        currentSolutionRequest: Supplier<Void>,
+        currentSolutionRequest: Supplier<Void?>,
         currentSolutionResponse: Consumer<TLongLongHashMap>,
         minWaitTimeAfterLastAction: Long) {
 

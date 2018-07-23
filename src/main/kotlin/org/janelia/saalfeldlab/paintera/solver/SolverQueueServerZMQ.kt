@@ -176,7 +176,7 @@ class SolverQueueServerZMQ(
             val request = this.latestSolutionRequestSocket.recv(0)
             LOG.warn("Received request: {}", request)
             try {
-                null as Void
+                null as? Void
             }
             finally {
                 LOG.warn("Returned null as Void")
