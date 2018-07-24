@@ -77,10 +77,11 @@ class SolverQueueServerZMQ(
 
                 val json = JsonObject()
                 val jsonActions = JsonArray()
-                for ( ta in actions )
-                {
-                    jsonActions.add(gson.toJsonTree(ta, AssignmentAction::class.java))
-                }
+                actions.forEach({jsonActions.add(gson.toJsonTree(it, AssignmentAction::class.java))})
+//                for ( ta in actions )
+//                {
+//                    jsonActions.add(gson.toJsonTree(ta, AssignmentAction::class.java))
+//                }
                 json.add("actions", jsonActions)
                 this.solutionRequestResponseSocket.send(json.toString())
             }
@@ -111,7 +112,7 @@ class SolverQueueServerZMQ(
 
         }
 
-        private fun toBytes(map : TLongLongMap) : ByteArray
+        public fun toBytes(map : TLongLongMap) : ByteArray
         {
             val keys = map.keys()
             val values = map.values()
@@ -125,6 +126,17 @@ class SolverQueueServerZMQ(
                 bb.putLong(iter.value())
             }
             return data
+        }
+
+        public fun fromBytes(serializedData : ByteArray) : TLongLongHashMap
+        {
+            val bb = ByteBuffer.wrap(serializedData)
+            val map = TLongLongHashMap()
+            while(bb.hasRemaining())
+            {
+                map.put(bb.long, bb.long)
+            }
+            return map
         }
 
         private class DistributeSolution(val solutionDistributionSocket : ZMQ.Socket ) : Consumer<TLongLongHashMap>
@@ -182,14 +194,14 @@ class SolverQueueServerZMQ(
         this.latestSolutionRequestSocket.bind(latestSolutionRequestAddress)
 
         val currentSolutionRequest = Supplier {
-            LOG.debug("Receiving solution request")
+            LOG.warn("Receiving solution request at address {}", latestSolutionRequestAddress)
             val request = this.latestSolutionRequestSocket.recv(0)
-            LOG.debug("Received request: {}", request)
+            LOG.warn("Received request: {}", request)
             try {
                 null as? Void
             }
             finally {
-                LOG.debug("Returned null as Void")
+                LOG.warn("Returned null as Void")
             }
         }
         val currentSolutionResponse = DistributeSolution(latestSolutionRequestSocket)

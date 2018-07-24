@@ -30,6 +30,7 @@ class SolverQueue(
         private val SCHEDULING_PERIOD : Long = 10
 
         private val SCHEDULING_PERIOD_UNIT = TimeUnit.MILLISECONDS
+
     }
 
     private val queue = ArrayList<AssignmentAction>()

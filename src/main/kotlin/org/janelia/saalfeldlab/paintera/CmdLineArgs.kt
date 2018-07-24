@@ -14,10 +14,12 @@ class CmdLineArgs : Callable<Boolean> {
     private var helpRequested: Boolean = false
 
     @CommandLine.Option(names = arrayOf("--raw-source"), paramLabel = "RAW_SOURCE", required = false, description = arrayOf("Open raw source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
-    private var rawSource: String? = null
+    var rawSources: Array<String> = arrayOf()
+    private set
 
     @CommandLine.Option(names = arrayOf("--label-source"), paramLabel = "LABEL_SOURCE", required = false, description = arrayOf("Open label source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
-    private var labelSource: String? = null
+    var labelSources: Array<String> = arrayOf()
+    private set
 
     @CommandLine.Option(names = arrayOf("--num-screen-scales"), paramLabel = "NUM_SCREEN_SCALES", required = false, description = arrayOf("Number of screen scales, defaults to 3"))
     private var numScreenScales: Int? = null
@@ -31,7 +33,7 @@ class CmdLineArgs : Callable<Boolean> {
     @CommandLine.Option(names = arrayOf("--screen-scales"), paramLabel = "SCREEN_SCALES", required = false, description = arrayOf("Explicitly set screen scales. Must be strictliy monotonically decreasing values in from the interval (0,1]. Overrides all other screen scale options."), arity = "1..*", split = ",")
     private var screenScales: DoubleArray? = null
 
-    @CommandLine.Parameters(index = "0", paramLabel = "PROJECT", arity = "1", description = arrayOf("Optional project N5 root (N5 or HDF5)."))
+    @CommandLine.Parameters(index = "0", paramLabel = "PROJECT", arity = "0..1", description = arrayOf("Optional project N5 root (N5 or HDF5)."))
     private var project: String? = null
 
 

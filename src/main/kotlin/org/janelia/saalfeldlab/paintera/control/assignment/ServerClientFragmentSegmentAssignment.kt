@@ -18,7 +18,10 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
 
-class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster, val solutionFetcher: Supplier< TLongLongHashMap >) : ObservableWithListenersList(), FragmentSegmentAssignment {
+class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster, val solutionFetcher: Supplier< TLongLongHashMap >) : ObservableWithListenersList(), FragmentSegmentAssignmentState {
+    override fun persist() {
+        LOG.debug("Nothing to persist here.")
+    }
 
     // https://github.com/saalfeldlab/bigcat/tree/8daba4571b5f1f3b6616c0db625332cf18091a64
 
@@ -57,7 +60,9 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
     private fun fetchAndApplySolution() : Boolean
     {
+        LOG.warn("Fetching solution")
         var initialSolution = solutionFetcher.get()
+        LOG.warn("Got solution {}", initialSolution)
         synchronized(this) {
             fragmentToSegmentMap.clear()
             fragmentToSegmentMap.putAll(initialSolution)
