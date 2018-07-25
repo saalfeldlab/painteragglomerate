@@ -21,7 +21,6 @@ import java.util.*
 class SolverQueueServerZMQTest {
 
 
-
     companion object {
 
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
@@ -73,29 +72,29 @@ class SolverQueueServerZMQTest {
                         val ids = Pair(merge.fromFragmentId, merge.intoFragmentId)
 //                        for (i in ids.indices)
 //                            for (m in i + 1 until ids.size) {
-                                val f1 = merge.fromFragmentId
-                                val f2 = merge.intoFragmentId
+                        val f1 = merge.fromFragmentId
+                        val f2 = merge.intoFragmentId
 
-                                if (!solution.contains(f1))
-                                    solution.put(f1, f1)
+                        if (!solution.contains(f1))
+                            solution.put(f1, f1)
 
-                                if (!solution.contains(f2))
-                                    solution.put(f2, f2)
+                        if (!solution.contains(f2))
+                            solution.put(f2, f2)
 
-                                val s1 = solution.get(f1)
-                                val s2 = solution.get(f2)
-                                val s = Math.min(s1, s2)
+                        val s1 = solution.get(f1)
+                        val s2 = solution.get(f2)
+                        val s = Math.min(s1, s2)
 
-                                val fs = TLongArrayList()
-                                solution.forEachEntry({ k, v ->
-                                    if (v == s1 || v == s2)
-                                        fs.add(k)
-                                    true
-                                })
-                                fs.forEach { id ->
-                                    solution.put(id, s)
-                                    true
-                                }
+                        val fs = TLongArrayList()
+                        solution.forEachEntry({ k, v ->
+                            if (v == s1 || v == s2)
+                                fs.add(k)
+                            true
+                        })
+                        fs.forEach { id ->
+                            solution.put(id, s)
+                            true
+                        }
 //                            }
 
                     } else if (action is Detach) {
@@ -191,8 +190,7 @@ class SolverQueueServerZMQTest {
         testActions.add(Detach(5, 1))
         testActions.add(Detach(3, 1))
         val testActionsJsonArray = JsonArray()
-        for ( ta in testActions )
-        {
+        for (ta in testActions) {
             testActionsJsonArray.add(gson.toJsonTree(ta, AssignmentAction::class.java))
         }
 

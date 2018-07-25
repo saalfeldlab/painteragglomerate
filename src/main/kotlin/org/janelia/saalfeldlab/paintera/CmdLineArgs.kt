@@ -15,11 +15,11 @@ class CmdLineArgs : Callable<Boolean> {
 
     @CommandLine.Option(names = arrayOf("--raw-source"), paramLabel = "RAW_SOURCE", required = false, description = arrayOf("Open raw source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
     var rawSources: Array<String> = arrayOf()
-    private set
+        private set
 
     @CommandLine.Option(names = arrayOf("--label-source"), paramLabel = "LABEL_SOURCE", required = false, description = arrayOf("Open label source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
     var labelSources: Array<String> = arrayOf()
-    private set
+        private set
 
     @CommandLine.Option(names = arrayOf("--num-screen-scales"), paramLabel = "NUM_SCREEN_SCALES", required = false, description = arrayOf("Number of screen scales, defaults to 3"))
     private var numScreenScales: Int? = null

@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory
 import java.lang.invoke.MethodHandles
 import java.lang.reflect.Type
 
-class AssignmentActionJsonAdapter : JsonSerializer< AssignmentAction >, JsonDeserializer<AssignmentAction> {
+class AssignmentActionJsonAdapter : JsonSerializer<AssignmentAction>, JsonDeserializer<AssignmentAction> {
 
 
     companion object {
@@ -16,11 +16,12 @@ class AssignmentActionJsonAdapter : JsonSerializer< AssignmentAction >, JsonDese
 
         private val DATA_KEY = "data";
     }
+
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): AssignmentAction {
         LOG.warn("Deserializing {}", json)
         val obj = json.asJsonObject
-        val type : AssignmentAction.Type  = context.deserialize(obj.get(TYPE_KEY), AssignmentAction.Type::class.java)
-        val deserialized : AssignmentAction = context.deserialize(obj.get(DATA_KEY), type.classForType )
+        val type: AssignmentAction.Type = context.deserialize(obj.get(TYPE_KEY), AssignmentAction.Type::class.java)
+        val deserialized: AssignmentAction = context.deserialize(obj.get(DATA_KEY), type.classForType)
         LOG.warn("Deserialized {}", deserialized)
         return deserialized
     }

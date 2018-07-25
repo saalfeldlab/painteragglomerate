@@ -27,14 +27,12 @@ class SolverQueueServerZMQ(
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        fun deserialize(jsonString : String, gson : Gson) : List<AssignmentAction>
-        {
+        fun deserialize(jsonString: String, gson: Gson): List<AssignmentAction> {
             val json = gson.fromJson(jsonString, JsonObject::class.java)
             val actions = ArrayList<AssignmentAction>()
             val actionsArray = json.get("actions")
             LOG.debug("Found actions array {}", actionsArray)
-            for ( el in actionsArray.asJsonArray )
-            {
+            for (el in actionsArray.asJsonArray) {
                 LOG.debug("Deserializing action element {}", el)
                 actions.add(gson.fromJson(el, AssignmentAction::class.java))
             }
@@ -42,8 +40,7 @@ class SolverQueueServerZMQ(
             return actions
         }
 
-        private class ReceiveAction(val gson: Gson, val actionReceiverSocket: ZMQ.Socket) : Supplier<Iterable<AssignmentAction>>
-        {
+        private class ReceiveAction(val gson: Gson, val actionReceiverSocket: ZMQ.Socket) : Supplier<Iterable<AssignmentAction>> {
             override fun get(): Iterable<AssignmentAction> {
                 LOG.debug("WAITING FOR MESSAGE IN ACTION RECEIVER at socket! {}", actionReceiverSocket)
                 val message = this.actionReceiverSocket.recvStr(0, Charset.defaultCharset())
@@ -60,8 +57,7 @@ class SolverQueueServerZMQ(
                 } catch (e: JsonParseException) {
                     LOG.debug("Error in parsing message {}: {}", message, e)
                     return ArrayList<AssignmentAction>()
-                }
-                finally{
+                } finally {
                     LOG.debug("Returned from {}.get()", this.javaClass.name)
                 }
             }
@@ -69,15 +65,14 @@ class SolverQueueServerZMQ(
         }
 
         private class SolutionRequest(
-                val gson : Gson,
+                val gson: Gson,
                 val solutionRequestResponseSocket: ZMQ.Socket
-        ) : Consumer<Collection<AssignmentAction>>
-        {
+        ) : Consumer<Collection<AssignmentAction>> {
             override fun accept(actions: Collection<AssignmentAction>) {
 
                 val json = JsonObject()
                 val jsonActions = JsonArray()
-                actions.forEach({jsonActions.add(gson.toJsonTree(it, AssignmentAction::class.java))})
+                actions.forEach({ jsonActions.add(gson.toJsonTree(it, AssignmentAction::class.java)) })
 //                for ( ta in actions )
 //                {
 //                    jsonActions.add(gson.toJsonTree(ta, AssignmentAction::class.java))
@@ -87,8 +82,7 @@ class SolverQueueServerZMQ(
             }
         }
 
-        private class ReceiveSolution(val solutionRequestResponseSocket: ZMQ.Socket) : Supplier<TLongLongHashMap>
-        {
+        private class ReceiveSolution(val solutionRequestResponseSocket: ZMQ.Socket) : Supplier<TLongLongHashMap> {
             override fun get(): TLongLongHashMap {
                 val data = this.solutionRequestResponseSocket.recv()
                 val numEntries = data.size / java.lang.Long.BYTES
@@ -104,23 +98,20 @@ class SolverQueueServerZMQ(
 
         }
 
-        private class RespondWithSolution(val latestSolutionRequestSocket : ZMQ.Socket) : Consumer<TLongLongMap>
-        {
+        private class RespondWithSolution(val latestSolutionRequestSocket: ZMQ.Socket) : Consumer<TLongLongMap> {
             override fun accept(solution: TLongLongMap) {
                 this.latestSolutionRequestSocket.send(toBytes(solution), 0)
             }
 
         }
 
-        public fun toBytes(map : TLongLongMap) : ByteArray
-        {
+        public fun toBytes(map: TLongLongMap): ByteArray {
             val keys = map.keys()
             val values = map.values()
             val data = ByteArray(java.lang.Long.BYTES * 2 * map.size())
             val bb = ByteBuffer.wrap(data)
             val iter = map.iterator()
-            while(iter.hasNext())
-            {
+            while (iter.hasNext()) {
                 iter.advance()
                 bb.putLong(iter.key())
                 bb.putLong(iter.value())
@@ -128,19 +119,16 @@ class SolverQueueServerZMQ(
             return data
         }
 
-        public fun fromBytes(serializedData : ByteArray) : TLongLongHashMap
-        {
+        public fun fromBytes(serializedData: ByteArray): TLongLongHashMap {
             val bb = ByteBuffer.wrap(serializedData)
             val map = TLongLongHashMap()
-            while(bb.hasRemaining())
-            {
+            while (bb.hasRemaining()) {
                 map.put(bb.long, bb.long)
             }
             return map
         }
 
-        private class DistributeSolution(val solutionDistributionSocket : ZMQ.Socket ) : Consumer<TLongLongHashMap>
-        {
+        private class DistributeSolution(val solutionDistributionSocket: ZMQ.Socket) : Consumer<TLongLongHashMap> {
             override fun accept(solution: TLongLongHashMap) {
                 LOG.debug("Sending solution: {}", solution)
                 this.solutionDistributionSocket.send(toBytes(solution), 0)
@@ -148,9 +136,17 @@ class SolverQueueServerZMQ(
             }
         }
 
-        public fun makeJavaRunnable(f: () -> Unit): Runnable = object : Runnable {override fun run() {f()}}
+        public fun makeJavaRunnable(f: () -> Unit): Runnable = object : Runnable {
+            override fun run() {
+                f()
+            }
+        }
 
-        public fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = object : Supplier<T> {override fun get() : T {return f()}}
+        public fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = object : Supplier<T> {
+            override fun get(): T {
+                return f()
+            }
+        }
     }
 
     private val ctx: ZMQ.Context
@@ -199,8 +195,7 @@ class SolverQueueServerZMQ(
             LOG.warn("Received request: {}", request)
             try {
                 null as? Void
-            }
-            finally {
+            } finally {
                 LOG.warn("Returned null as Void")
             }
         }

@@ -8,10 +8,9 @@ import org.zeromq.ZMQ
 import java.io.Closeable
 
 class ZMQAssignmentActionBroadcaster(
-        context : ZMQ.Context,
-        address : String
-) : AssignmentActionBroadcaster, Closeable
-{
+        context: ZMQ.Context,
+        address: String
+) : AssignmentActionBroadcaster, Closeable {
 
     val socket = createPublishSocket(context, address)
 
@@ -23,16 +22,16 @@ class ZMQAssignmentActionBroadcaster(
 
     override fun broadcast(actions: Collection<AssignmentAction>) {
         val arr = JsonArray()
-        actions.forEach({arr.add(gson.toJsonTree(it, AssignmentAction::class.java))})
+        actions.forEach({ arr.add(gson.toJsonTree(it, AssignmentAction::class.java)) })
         socket.send(arr.toString())
     }
+
     override fun close() {
         socket.close()
     }
 
     companion object {
-        private fun createPublishSocket(context : ZMQ.Context, address: String) : ZMQ.Socket
-        {
+        private fun createPublishSocket(context: ZMQ.Context, address: String): ZMQ.Socket {
             val socket = context.socket(ZMQ.PUB)
             socket.bind(address)
             return socket

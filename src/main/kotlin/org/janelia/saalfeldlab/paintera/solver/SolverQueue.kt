@@ -27,7 +27,7 @@ class SolverQueue(
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private val SCHEDULING_PERIOD : Long = 10
+        private val SCHEDULING_PERIOD: Long = 10
 
         private val SCHEDULING_PERIOD_UNIT = TimeUnit.MILLISECONDS
 
@@ -52,74 +52,72 @@ class SolverQueue(
         this.latestSolution = initialSolution.get()
 
         actionReceiverService.scheduleWithFixedDelay(
-            {
-                LOG.debug("Waiting for action in queue!")
-                val actions = actionReceiver.get()
-                LOG.debug("Got action in queue! " + actions)
-                if (actions != null)
-                    synchronized(queue) {
-                        timeOfLastAction.set(System.currentTimeMillis())
-                        actions.forEach(Consumer<AssignmentAction> { queue.add(it) })
-                        actionReceiptConfirmation.run()
-                    }
-               },
+                {
+                    LOG.debug("Waiting for action in queue!")
+                    val actions = actionReceiver.get()
+                    LOG.debug("Got action in queue! " + actions)
+                    if (actions != null)
+                        synchronized(queue) {
+                            timeOfLastAction.set(System.currentTimeMillis())
+                            actions.forEach(Consumer<AssignmentAction> { queue.add(it) })
+                            actionReceiptConfirmation.run()
+                        }
+                },
                 0,
                 SCHEDULING_PERIOD,
                 SCHEDULING_PERIOD_UNIT
-            )
+        )
 
         solutionHandlerService.scheduleWithFixedDelay({
-                var sentRequest = false
+            var sentRequest = false
             LOG.debug("checking if a request was sent {}", sentRequest)
-                synchronized(this.queue) {
-                    val currentTime = System.currentTimeMillis()
-                    val timeDiff = currentTime - timeOfLastAction.get()
+            synchronized(this.queue) {
+                val currentTime = System.currentTimeMillis()
+                val timeDiff = currentTime - timeOfLastAction.get()
 
-                    if (timeDiff >= minWaitTimeAfterLastAction)
+                if (timeDiff >= minWaitTimeAfterLastAction)
 
-                        if (queue.size > 0) {
-                            solutionRequestToSolver.accept(queue)
-                            sentRequest = sentRequest or true
-                            queue.clear()
-                        }
+                    if (queue.size > 0) {
+                        solutionRequestToSolver.accept(queue)
+                        sentRequest = sentRequest or true
+                        queue.clear()
+                    }
 
 
-                    if (sentRequest) {
-                        val solution = solutionReceiver.get()
-                        synchronized(latestSolution) {
-                            this.latestSolution.clear()
-                            this.latestSolution.putAll(solution)
-                            solutionDistributor.accept(latestSolution)
-                        }
+                if (sentRequest) {
+                    val solution = solutionReceiver.get()
+                    synchronized(latestSolution) {
+                        this.latestSolution.clear()
+                        this.latestSolution.putAll(solution)
+                        solutionDistributor.accept(latestSolution)
                     }
                 }
-        }, 0, 100, TimeUnit.MILLISECONDS )
+            }
+        }, 0, 100, TimeUnit.MILLISECONDS)
 
 
         currentSolutionProviderSerivce.scheduleWithFixedDelay({
             LOG.warn("Waiting for solution request")
             val empty = currentSolutionRequest.get()
             LOG.warn("Empty request: ", empty)
-            val currentSolution : TLongLongHashMap = getCurrentSolution()
+            val currentSolution: TLongLongHashMap = getCurrentSolution()
             LOG.warn("Going to distribute current solution: ", currentSolution)
             currentSolutionResponse.accept(currentSolution)
         },
                 0,
                 SCHEDULING_PERIOD,
-                SCHEDULING_PERIOD_UNIT )
+                SCHEDULING_PERIOD_UNIT)
 
     }
 
-    fun getCurrentSolution() : TLongLongHashMap
-    {
+    fun getCurrentSolution(): TLongLongHashMap {
         synchronized(this.latestSolution)
         {
             return TLongLongHashMap(this.latestSolution)
         }
     }
 
-    fun forceStop()
-    {
+    fun forceStop() {
         actionReceiverService.shutdownNow()
         solutionHandlerService.shutdownNow()
     }

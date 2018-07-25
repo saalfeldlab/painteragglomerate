@@ -2,20 +2,13 @@ package org.janelia.saalfeldlab.paintera.solver
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
-import com.google.gson.JsonObject
-import gnu.trove.list.array.TLongArrayList
 import gnu.trove.map.hash.TLongLongHashMap
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction
-import org.janelia.saalfeldlab.paintera.control.assignment.action.Detach
-import org.janelia.saalfeldlab.paintera.control.assignment.action.Merge
-import org.junit.Assert
 import org.junit.Test
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import java.io.IOException
 import java.lang.invoke.MethodHandles
-import java.nio.ByteBuffer
-import java.util.*
 import java.util.function.Supplier
 
 class ZMQTest {
@@ -58,22 +51,20 @@ class ZMQTest {
             LOG.warn("Received request: {}", request)
             try {
                 null as? Void
-            }
-            finally {
+            } finally {
                 LOG.warn("Returned null as Void")
             }
         }
 
-        val t = Thread( {
+        val t = Thread({
             val message = currentSolutionRequest.get()
             LOG.warn("Received message ${message}")
-        } )
+        })
         t.start()
 
         currentSolutionSocket.send("")
 
         t.join()
-
 
 
     }

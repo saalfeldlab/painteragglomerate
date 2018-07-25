@@ -21,13 +21,11 @@ import java.util.stream.LongStream
  * IS_INVALIDATED: N=1  -> >0 if invalidated, else 0
  */
 class IdSelectorZMQ(
-        idRequestAddress : String,
-        context : ZMQ.Context
-) : IdService, Closeable
-{
+        idRequestAddress: String,
+        context: ZMQ.Context
+) : IdService, Closeable {
 
-    enum class Message(val type: Byte)
-    {
+    enum class Message(val type: Byte) {
         INVALIDATE(0x01),
         NEXT(0x02),
         IS_INVALIDATED(0x03)
@@ -41,7 +39,7 @@ class IdSelectorZMQ(
         val bb = ByteBuffer.wrap(data)
         bb.put(Message.INVALIDATE.type)
         bb.putLong(id)
-        synchronized( nextIdRequestSocket )
+        synchronized(nextIdRequestSocket)
         {
             val sentSuccessfully = nextIdRequestSocket.send(data, 0)
             LOG.warn("Sent message {} successfully? {}", data, sentSuccessfully)
@@ -58,7 +56,7 @@ class IdSelectorZMQ(
         val bb = ByteBuffer.wrap(data)
         bb.put(Message.NEXT.type)
         bb.putInt(n)
-        synchronized( nextIdRequestSocket )
+        synchronized(nextIdRequestSocket)
         {
             val sentSuccessfully = nextIdRequestSocket.send(data, 0)
             LOG.warn("Sent message {} successfully? {}", data, sentSuccessfully)
@@ -74,7 +72,7 @@ class IdSelectorZMQ(
         val bb = ByteBuffer.wrap(data)
         bb.put(Message.IS_INVALIDATED.type)
         bb.putLong(id)
-        synchronized( nextIdRequestSocket )
+        synchronized(nextIdRequestSocket)
         {
             val sentSuccessfully = nextIdRequestSocket.send(data, 0)
             LOG.warn("Sent message {} successfully? {}", data, sentSuccessfully)
@@ -91,7 +89,7 @@ class IdSelectorZMQ(
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private fun requestSocket(context : ZMQ.Context, address : String) : ZMQ.Socket {
+        private fun requestSocket(context: ZMQ.Context, address: String): ZMQ.Socket {
             val socket = context.socket(ZMQ.REQ)
             socket.connect(address)
             return socket

@@ -65,7 +65,7 @@ class PainterAgglomerate : Application() {
         val actionReceiverAddress = "inproc://assignment-actions"
         val solutionRequestResponseAddress = "ipc:///tmp/mc-solver"
         val solutionDistributionAddress = "inproc://solution"
-        val initialSolution = Supplier{ TLongLongHashMap() }
+        val initialSolution = Supplier { TLongLongHashMap() }
         val latestSolutionRequestAddress = "inproc://latest-solution-request"
         val idRequestAddress = "ipc://id-service"
 
@@ -83,9 +83,9 @@ class PainterAgglomerate : Application() {
 
         val assignment = ServerClientFragmentSegmentAssignment(ZMQAssignmentActionBroadcaster(context, actionReceiverAddress), ZMQSolutionFetcher(context, latestSolutionRequestAddress))
 
-        cmdLineArgs.rawSources.forEachIndexed({index,rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index==0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr() )})
+        cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
 
-        cmdLineArgs.labelSources.forEach({Paintera.addLabelFromStringNoGenerics(pbv, it, projectDirectory, Paintera.GetAssignment{n5, dataset -> assignment}, Paintera.GetN5IDService({n5, dataset -> idSelector}))})
+        cmdLineArgs.labelSources.forEach({ Paintera.addLabelFromStringNoGenerics(pbv, it, projectDirectory, Paintera.GetAssignment { n5, dataset -> assignment }, Paintera.GetN5IDService({ n5, dataset -> idSelector })) })
 
         val scene = Scene(viewer.paneWithStatus.pane, 800.0, 600.0)
 
@@ -116,7 +116,7 @@ class PainterAgglomerate : Application() {
         @Throws(UnableToAddSource::class)
         private fun <D, T> addRawFromString(
                 pbv: PainteraBaseView,
-                identifier: String): Optional<DataSource<D, T>> where D : RealType<D>, D: NativeType<D>, T : NativeType<T>, T : RealType<T>, T : Volatile<D> {
+                identifier: String): Optional<DataSource<D, T>> where D : RealType<D>, D : NativeType<D>, T : NativeType<T>, T : RealType<T>, T : Volatile<D> {
             if (!Pattern.matches("^[a-z]+://.+", identifier)) {
                 return addRawFromString(pbv, "file://$identifier")
             }
@@ -128,7 +128,7 @@ class PainterAgglomerate : Application() {
                     val dataset = split[1]
                     val name = N5Helpers.lastSegmentOfDatasetPath(dataset)
 
-                    val source = N5Helpers.openRawAsSource< D, T, Any >(
+                    val source = N5Helpers.openRawAsSource<D, T, Any>(
                             reader,
                             dataset,
                             N5Helpers.getTransform(reader, dataset),
@@ -179,12 +179,12 @@ class PainterAgglomerate : Application() {
                     val name = N5Helpers.lastSegmentOfDatasetPath(dataset)
                     val selectedIds = SelectedIds()
                     val idService = N5Helpers.idService(n5, dataset)
-                    val lockedSegments = LockedSegmentsOnlyLocal(Consumer{ locked -> })
+                    val lockedSegments = LockedSegmentsOnlyLocal(Consumer { locked -> })
                     val stream = ModalGoldenAngleSaturatedHighlightingARGBStream(
                             selectedIds,
                             assignment,
                             lockedSegments)
-                    val dataSource = N5Helpers.openAsLabelSource< D, T >(
+                    val dataSource = N5Helpers.openAsLabelSource<D, T>(
                             n5,
                             dataset,
                             transform,
@@ -201,8 +201,8 @@ class PainterAgglomerate : Application() {
 
                     val blockLoaders = Arrays
                             .stream(N5Helpers.labelMappingFromFileLoaderPattern(n5, dataset))
-                            .map<BlocksForLabelFromFile>(java.util.function.Function{ BlocksForLabelFromFile(it) })
-                            .toArray<BlocksForLabelFromFile>({ n : Int -> Array<BlocksForLabelFromFile?>(n, {i -> null})})
+                            .map<BlocksForLabelFromFile>(java.util.function.Function { BlocksForLabelFromFile(it) })
+                            .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { i -> null }) })
 
                     val state = LabelSourceState<D, T>(
                             maskedSource,

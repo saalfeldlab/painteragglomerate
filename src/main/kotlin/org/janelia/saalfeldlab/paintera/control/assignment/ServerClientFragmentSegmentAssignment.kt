@@ -18,7 +18,7 @@ import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.function.Supplier
 
-class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster, val solutionFetcher: Supplier< TLongLongHashMap >) : ObservableWithListenersList(), FragmentSegmentAssignmentState {
+class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster, val solutionFetcher: Supplier<TLongLongHashMap>) : ObservableWithListenersList(), FragmentSegmentAssignmentState {
     override fun persist() {
         LOG.debug("Nothing to persist here.")
     }
@@ -26,8 +26,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
     // https://github.com/saalfeldlab/bigcat/tree/8daba4571b5f1f3b6616c0db625332cf18091a64
 
     // static stuff
-    companion object
-    {
+    companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
     }
 
@@ -40,7 +39,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
     private val submittedActions = HashSet<AssignmentAction>()
 
-    private val receiveThread : ScheduledExecutorService = Executors.newScheduledThreadPool(1, NamedThreadFactory("${javaClass.simpleName}-receieve", true))
+    private val receiveThread: ScheduledExecutorService = Executors.newScheduledThreadPool(1, NamedThreadFactory("${javaClass.simpleName}-receieve", true))
 
     init {
 
@@ -58,8 +57,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
     }
 
-    private fun fetchAndApplySolution() : Boolean
-    {
+    private fun fetchAndApplySolution(): Boolean {
         LOG.warn("Fetching solution")
         var initialSolution = solutionFetcher.get()
         LOG.warn("Got solution {}", initialSolution)
@@ -71,8 +69,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
         return true
     }
 
-    private fun applyOnly(action: AssignmentAction)
-    {
+    private fun applyOnly(action: AssignmentAction) {
         LOG.debug("Applying action {}", action)
         when (action.type) {
             AssignmentAction.Type.MERGE -> {

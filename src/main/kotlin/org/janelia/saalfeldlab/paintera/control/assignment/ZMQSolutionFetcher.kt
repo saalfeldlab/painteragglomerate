@@ -8,13 +8,12 @@ import java.io.Closeable
 import java.lang.invoke.MethodHandles
 import java.util.function.Supplier
 
-class ZMQSolutionFetcher(context : ZMQ.Context, val address : String) : Supplier<TLongLongHashMap>, Closeable {
+class ZMQSolutionFetcher(context: ZMQ.Context, val address: String) : Supplier<TLongLongHashMap>, Closeable {
 
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private fun createSocket(context : ZMQ.Context, address : String) : ZMQ.Socket
-        {
+        private fun createSocket(context: ZMQ.Context, address: String): ZMQ.Socket {
             val socket = context.socket(ZMQ.REQ)
             socket.connect(address)
             return socket
