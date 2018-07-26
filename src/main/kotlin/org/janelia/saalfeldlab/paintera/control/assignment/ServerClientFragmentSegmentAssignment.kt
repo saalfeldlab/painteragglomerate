@@ -53,7 +53,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
                 history.forEach(::applyOnly)
             }
             stateChanged()
-        }, 0, 0, TimeUnit.MILLISECONDS)
+        }, 0, 10, TimeUnit.MILLISECONDS)
 
     }
 
