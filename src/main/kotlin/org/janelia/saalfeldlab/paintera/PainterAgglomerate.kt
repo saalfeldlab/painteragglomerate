@@ -62,11 +62,11 @@ class PainterAgglomerate : Application() {
         Platform.setImplicitExit(true)
 
         // TODO("Define these addresses")
-        val actionReceiverAddress = "inproc://assignment-actions"
+        val actionReceiverAddress = "ipc://assignment-actions"
         val solutionRequestResponseAddress = "ipc:///tmp/mc-solver"
-        val solutionDistributionAddress = "inproc://solution"
+        val solutionDistributionAddress = "ipc://solution"
         val initialSolution = Supplier { TLongLongHashMap() }
-        val latestSolutionRequestAddress = "inproc://latest-solution-request"
+        val latestSolutionRequestAddress = "ipc://latest-solution-request"
         val idRequestAddress = "ipc://id-service"
 
         val solverQueue = SolverQueueServerZMQ(
@@ -98,6 +98,7 @@ class PainterAgglomerate : Application() {
     }
 
     override fun stop() {
+        LOG.debug("Stopping application")
         pbv.stop()
         context.close()
     }
