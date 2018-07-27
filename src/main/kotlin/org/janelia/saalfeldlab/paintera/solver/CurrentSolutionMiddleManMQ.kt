@@ -2,6 +2,7 @@ package org.janelia.saalfeldlab.paintera.solver
 
 import gnu.trove.map.hash.TLongLongHashMap
 import org.janelia.saalfeldlab.paintera.util.zmq.isArraySizeValid
+import org.janelia.saalfeldlab.paintera.util.zmq.sockets.CloseableSocket
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.clientSocket
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.publisherSocket
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.subscriberSocket
@@ -14,7 +15,7 @@ import java.lang.invoke.MethodHandles
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicBoolean
 
-class CurrentSolutionServerZMQ(
+class CurrentSolutionMiddleManMQ(
         context: ZMQ.Context,
         solutionRequestAddress: String,
         solutionSubscriptionAddress: String,
@@ -22,7 +23,7 @@ class CurrentSolutionServerZMQ(
         solutionSubscriptionTopic: String = "",
         currentSolutionUpdatePublishTopic: String = "",
         receiveTimeout: Int = -1
-) : CurrentSolutionServer, Closeable {
+) : CurrentSolutionMiddleMan, Closeable {
 
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
@@ -49,14 +50,14 @@ class CurrentSolutionServerZMQ(
     }
 
 
-    @Throws(CurrentSolutionServer.UnableToUpdate::class)
+    @Throws(CurrentSolutionMiddleMan.UnableToUpdate::class)
     override fun updateCurrentSolution() {
         val sentSuccessfully = solutionRequestSocket.send("")
 
         if (!sentSuccessfully)
-            throw CurrentSolutionServer.UnableToUpdate()
+            throw CurrentSolutionMiddleMan.UnableToUpdate()
 
-        val response: ByteArray = solutionRequestSocket.recv() ?: throw CurrentSolutionServer.UnableToUpdate()
+        val response: ByteArray = solutionRequestSocket.recv() ?: throw CurrentSolutionMiddleMan.UnableToUpdate()
 
         updateSolutionFromByteArray(response)
 
@@ -80,28 +81,16 @@ class CurrentSolutionServerZMQ(
         LOG.debug("Published new solution? {}", contentsSent)
     }
 
-    @Throws(CurrentSolutionServer.UnableToUpdate::class)
+    @Throws(CurrentSolutionMiddleMan.UnableToUpdate::class)
     private fun updateSolutionFromByteArray(data: ByteArray) {
         if (!isArraySizeValid(data))
-            throw CurrentSolutionServer.UnableToUpdate()
+            throw CurrentSolutionMiddleMan.UnableToUpdate()
 
         val newSolution = toMapFromSolverServer(data)
 
         if (newSolution != currentSolution) {
             solutionChanged(newSolution)
         }
-    }
-
-    private open class CloseableSocket(val socket: ZMQ.Socket) : Closeable {
-
-        val isClosed = AtomicBoolean(false)
-
-        override fun close() {
-            isClosed.set(true)
-            socket.close()
-        }
-
-
     }
 
     private class SolutionPublisher(

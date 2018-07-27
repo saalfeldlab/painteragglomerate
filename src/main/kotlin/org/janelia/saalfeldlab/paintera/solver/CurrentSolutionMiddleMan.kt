@@ -2,7 +2,7 @@ package org.janelia.saalfeldlab.paintera.solver
 
 import gnu.trove.map.hash.TLongLongHashMap
 
-interface CurrentSolutionServer {
+interface CurrentSolutionMiddleMan {
 
     fun currentSolution() : TLongLongHashMap
 
