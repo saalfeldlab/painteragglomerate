@@ -15,7 +15,7 @@ import java.lang.invoke.MethodHandles
 import java.nio.charset.Charset
 import java.util.concurrent.atomic.AtomicBoolean
 
-class CurrentSolutionMiddleManMQ(
+class CurrentSolutionMiddleManZMQ(
         context: ZMQ.Context,
         solutionRequestAddress: String,
         solutionSubscriptionAddress: String,

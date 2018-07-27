@@ -56,7 +56,7 @@ class CurrentSolutionServerZMQTest {
         }
         solutionResponseThread.start()
 
-        val server = CurrentSolutionMiddleManMQ(
+        val server = CurrentSolutionMiddleManZMQ(
                 context,
                 solutionRequestAddress,
                 solutionSubscriptionAddress,
