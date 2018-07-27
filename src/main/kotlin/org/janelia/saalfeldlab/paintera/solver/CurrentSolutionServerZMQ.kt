@@ -12,6 +12,7 @@ import org.zeromq.ZMQ
 import java.io.Closeable
 import java.lang.invoke.MethodHandles
 import java.nio.charset.Charset
+import java.util.concurrent.atomic.AtomicBoolean
 
 class CurrentSolutionServerZMQ(
         context: ZMQ.Context,
@@ -28,28 +29,15 @@ class CurrentSolutionServerZMQ(
 
     var currentSolution = TLongLongHashMap()
         private set
+
+    private val serverSolutionSubscriber = ServerSolutionSubscriber(context, solutionSubscriptionAddress, solutionSubscriptionTopic, ::updateSolutionFromByteArray)
+
     val solutionRequestSocket: ZMQ.Socket
-    val solutionSubscriptionSocket: ZMQ.Socket
     val currentSolutionUpdatePublishSocket: ZMQ.Socket
-    val solutionSubscriptionThread: Thread
 
     init {
         solutionRequestSocket = clientSocket(context, solutionRequestAddress)
-        solutionSubscriptionSocket = subscriberSocket(context, solutionSubscriptionAddress, solutionSubscriptionTopic)
         currentSolutionUpdatePublishSocket = publisherSocket(context, currentSolutionUpdatePublishAddress)
-
-
-        solutionSubscriptionThread = Thread {
-            while(!Thread.currentThread().isInterrupted) {
-                LOG.debug("Waiting for publication on topic `{}'", solutionSubscriptionTopic)
-                val topic = solutionSubscriptionSocket.recvStr(Charset.defaultCharset())
-                LOG.debug("Received message for topic `{}'", topic)
-                val contents = solutionSubscriptionSocket.recv()
-                LOG.debug("Received contents `{}' for topic `{}'", contents, topic)
-                updateSolutionFromByteArray(contents)
-            }
-        }
-        solutionSubscriptionThread.start()
     }
 
 
@@ -72,8 +60,7 @@ class CurrentSolutionServerZMQ(
 
     override fun close() {
         solutionRequestSocket.close()
-        solutionSubscriptionSocket.close()
-        solutionSubscriptionThread.interrupt()
+        serverSolutionSubscriber.close()
     }
 
     @Synchronized
@@ -100,6 +87,40 @@ class CurrentSolutionServerZMQ(
         {
             solutionChanged(newSolution)
         }
+    }
+
+    private class ServerSolutionSubscriber(
+            context: ZMQ.Context,
+            val address: String,
+            val topic: String,
+            val updateSolutionFromByteArray: (ByteArray) -> Unit) : Closeable{
+
+
+        val socket = subscriberSocket(context, address, topic)
+
+        val isClosed = AtomicBoolean(false)
+
+        val solutionSubscriptionThread = Thread {
+            while(!Thread.currentThread().isInterrupted) {
+                LOG.debug("Waiting for publication on topic `{}'", topic)
+                val topic = socket.recvStr(Charset.defaultCharset())
+                LOG.debug("Received message for topic `{}'", topic)
+                val contents = socket.recv()
+                LOG.debug("Received contents `{}' for topic `{}'", contents, topic)
+                updateSolutionFromByteArray(contents)
+            }
+        }
+
+        init {
+            solutionSubscriptionThread.start()
+        }
+
+        override fun close() {
+            isClosed.set(true)
+            solutionSubscriptionThread.interrupt()
+            socket.close()
+        }
+
     }
 
 
