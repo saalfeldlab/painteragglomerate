@@ -59,7 +59,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
     private fun fetchAndApplySolution(): Boolean {
         LOG.warn("Fetching solution")
-        var initialSolution = solutionFetcher.get()
+        val initialSolution = solutionFetcher.get()
         LOG.warn("Got solution {}", initialSolution)
         synchronized(this) {
             fragmentToSegmentMap.clear()
@@ -80,6 +80,9 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
                 LOG.debug("Applying detach {}", action)
                 detachFragmentImpl(action as Detach)
             }
+            else -> {
+
+            }
         }
     }
 
@@ -91,7 +94,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
         stateChanged()
     }
 
-    override fun apply(actions: Collection<out AssignmentAction>) {
+    override fun apply(actions: Collection<AssignmentAction>) {
         history.addAll(actions)
         submittedActions.addAll(actions)
         broadcaster.broadcast(actions)
@@ -102,10 +105,10 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
     override fun getSegment(fragmentId: Long): Long {
         val id: Long
         val segmentId = fragmentToSegmentMap.get(fragmentId)
-        if (segmentId == fragmentToSegmentMap.noEntryValue) {
-            id = fragmentId
+        id = if (segmentId == fragmentToSegmentMap.noEntryValue) {
+            fragmentId
         } else {
-            id = segmentId
+            segmentId
         }
         LOG.debug("Returning {} for fragment {}: ", id, fragmentId)
         return id

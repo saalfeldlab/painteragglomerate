@@ -10,30 +10,30 @@ import java.util.concurrent.Callable
 @CommandLine.Command(name = "PainterAgglomerate")
 class CmdLineArgs : Callable<Boolean> {
 
-    @CommandLine.Option(names = arrayOf("-h", "--help"), usageHelp = true, description = arrayOf("Display this help message."))
+    @CommandLine.Option(names = ["-h", "--help"], usageHelp = true, description = ["Display this help message."])
     private var helpRequested: Boolean = false
 
-    @CommandLine.Option(names = arrayOf("--raw-source"), paramLabel = "RAW_SOURCE", required = false, description = arrayOf("Open raw source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
+    @CommandLine.Option(names = ["--raw-source"], paramLabel = "RAW_SOURCE", required = false, description = ["Open raw source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"])
     var rawSources: Array<String> = arrayOf()
         private set
 
-    @CommandLine.Option(names = arrayOf("--label-source"), paramLabel = "LABEL_SOURCE", required = false, description = arrayOf("Open label source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"))
+    @CommandLine.Option(names = ["--label-source"], paramLabel = "LABEL_SOURCE", required = false, description = ["Open label source at start-up. Has to be [file://]/path/to/<n5-or-hdf5>:path/to/dataset"])
     var labelSources: Array<String> = arrayOf()
         private set
 
-    @CommandLine.Option(names = arrayOf("--num-screen-scales"), paramLabel = "NUM_SCREEN_SCALES", required = false, description = arrayOf("Number of screen scales, defaults to 3"))
+    @CommandLine.Option(names = ["--num-screen-scales"], paramLabel = "NUM_SCREEN_SCALES", required = false, description = ["Number of screen scales, defaults to 3"])
     private var numScreenScales: Int? = null
 
-    @CommandLine.Option(names = arrayOf("--highest-screen-scale"), paramLabel = "HIGHEST_SCREEN_SCALE", required = false, description = arrayOf("Highest screen scale, restricted to the interval (0,1], defaults to 1"))
+    @CommandLine.Option(names = ["--highest-screen-scale"], paramLabel = "HIGHEST_SCREEN_SCALE", required = false, description = ["Highest screen scale, restricted to the interval (0,1], defaults to 1"])
     private var highestScreenScale: Double? = null
 
-    @CommandLine.Option(names = arrayOf("--screen-scale-factor"), paramLabel = "SCREEN_SCALE_FACTOR", required = false, description = arrayOf("Scalar value from the open interval (0,1) that defines how screen scales diminish in each dimension. Defaults to 0.5"))
+    @CommandLine.Option(names = ["--screen-scale-factor"], paramLabel = "SCREEN_SCALE_FACTOR", required = false, description = ["Scalar value from the open interval (0,1) that defines how screen scales diminish in each dimension. Defaults to 0.5"])
     private var screenScaleFactor: Double? = null
 
-    @CommandLine.Option(names = arrayOf("--screen-scales"), paramLabel = "SCREEN_SCALES", required = false, description = arrayOf("Explicitly set screen scales. Must be strictliy monotonically decreasing values in from the interval (0,1]. Overrides all other screen scale options."), arity = "1..*", split = ",")
+    @CommandLine.Option(names = ["--screen-scales"], paramLabel = "SCREEN_SCALES", required = false, description = ["Explicitly set screen scales. Must be strictliy monotonically decreasing values in from the interval (0,1]. Overrides all other screen scale options."], arity = "1..*", split = ",")
     private var screenScales: DoubleArray? = null
 
-    @CommandLine.Parameters(index = "0", paramLabel = "PROJECT", arity = "0..1", description = arrayOf("Optional project N5 root (N5 or HDF5)."))
+    @CommandLine.Parameters(index = "0", paramLabel = "PROJECT", arity = "0..1", description = ["Optional project N5 root (N5 or HDF5)."])
     private var project: String? = null
 
 
@@ -88,7 +88,7 @@ class CmdLineArgs : Callable<Boolean> {
 
         @Throws(ZeroLengthScreenScales::class, InvalidScreenScaleValue::class, ScreenScaleNotDecreasing::class)
         private fun checkScreenScales(screenScales: DoubleArray) {
-            if (screenScales.size == 0) {
+            if (screenScales.isEmpty()) {
                 throw ZeroLengthScreenScales()
             }
 

@@ -28,8 +28,7 @@ class CurrentSolutionServerZMQ(
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
     }
 
-    var currentSolution = TLongLongHashMap()
-        private set
+    private var currentSolution = TLongLongHashMap()
 
     private val solutionPublisher = SolutionPublisher(context, currentSolutionUpdatePublishAddress, currentSolutionUpdatePublishTopic)
     private val serverSolutionSubscriber = ServerSolutionSubscriber(
@@ -57,7 +56,7 @@ class CurrentSolutionServerZMQ(
         if (!sentSuccessfully)
             throw CurrentSolutionServer.UnableToUpdate()
 
-        val response = solutionRequestSocket.recv()
+        val response: ByteArray = solutionRequestSocket.recv() ?: throw CurrentSolutionServer.UnableToUpdate()
 
         updateSolutionFromByteArray(response)
 
@@ -88,7 +87,7 @@ class CurrentSolutionServerZMQ(
 
         val newSolution = toMapFromSolverServer(data)
 
-        if (!newSolution.equals(currentSolution)) {
+        if (newSolution != currentSolution) {
             solutionChanged(newSolution)
         }
     }

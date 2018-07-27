@@ -12,9 +12,9 @@ class AssignmentActionJsonAdapter : JsonSerializer<AssignmentAction>, JsonDeseri
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private val TYPE_KEY = "type";
+        private const val TYPE_KEY = "type";
 
-        private val DATA_KEY = "data";
+        private const val DATA_KEY = "data";
     }
 
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): AssignmentAction {

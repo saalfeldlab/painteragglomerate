@@ -43,7 +43,7 @@ class IdSelectorZMQ(
         {
             val sentSuccessfully = nextIdRequestSocket.send(data, 0)
             LOG.warn("Sent message {} successfully? {}", data, sentSuccessfully)
-            val response = nextIdRequestSocket.recv()
+            nextIdRequestSocket.recv()
         }
     }
 

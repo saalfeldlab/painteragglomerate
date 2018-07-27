@@ -56,12 +56,11 @@ class SolverQueue(
                     LOG.debug("Waiting for action in queue!")
                     val actions = actionReceiver.get()
                     LOG.debug("Got action in queue! " + actions)
-                    if (actions != null)
-                        synchronized(queue) {
-                            timeOfLastAction.set(System.currentTimeMillis())
-                            actions.forEach(Consumer<AssignmentAction> { queue.add(it) })
-                            actionReceiptConfirmation.run()
-                        }
+                    synchronized(queue) {
+                        timeOfLastAction.set(System.currentTimeMillis())
+                        actions.forEach(Consumer<AssignmentAction> { queue.add(it) })
+                        actionReceiptConfirmation.run()
+                    }
                 },
                 0,
                 SCHEDULING_PERIOD,

@@ -47,16 +47,16 @@ class SolverQueueServerZMQ(
                 LOG.debug("RECEIVED THE FOLLOWING MESSAGE: {}", message)
 
                 if (message == null)
-                    return ArrayList<AssignmentAction>()
+                    return ArrayList()
 
-                try {
+                return try {
                     val actions = deserialize(message, gson)
 
                     LOG.debug("RETURNING THESE ACTIONS: {}", actions)
-                    return actions
+                    actions
                 } catch (e: JsonParseException) {
                     LOG.debug("Error in parsing message {}: {}", message, e)
-                    return ArrayList<AssignmentAction>()
+                    ArrayList()
                 } finally {
                     LOG.debug("Returned from {}.get()", this.javaClass.name)
                 }
@@ -105,9 +105,7 @@ class SolverQueueServerZMQ(
 
         }
 
-        public fun toBytes(map: TLongLongMap): ByteArray {
-            val keys = map.keys()
-            val values = map.values()
+        fun toBytes(map: TLongLongMap): ByteArray {
             val data = ByteArray(java.lang.Long.BYTES * 2 * map.size())
             val bb = ByteBuffer.wrap(data)
             val iter = map.iterator()
@@ -119,7 +117,7 @@ class SolverQueueServerZMQ(
             return data
         }
 
-        public fun fromBytes(serializedData: ByteArray): TLongLongHashMap {
+        fun fromBytes(serializedData: ByteArray): TLongLongHashMap {
             val bb = ByteBuffer.wrap(serializedData)
             val map = TLongLongHashMap()
             while (bb.hasRemaining()) {
@@ -136,17 +134,9 @@ class SolverQueueServerZMQ(
             }
         }
 
-        public fun makeJavaRunnable(f: () -> Unit): Runnable = object : Runnable {
-            override fun run() {
-                f()
-            }
-        }
+        fun makeJavaRunnable(f: () -> Unit): Runnable = Runnable { f() }
 
-        public fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = object : Supplier<T> {
-            override fun get(): T {
-                return f()
-            }
-        }
+        fun <T> makeJavaSupplier(f: () -> T): Supplier<T> = Supplier { f() }
     }
 
     private val ctx: ZMQ.Context
@@ -194,7 +184,7 @@ class SolverQueueServerZMQ(
             val request = this.latestSolutionRequestSocket.recv(0)
             LOG.warn("Received request: {}", request)
             try {
-                null as? Void
+                null as? Void?
             } finally {
                 LOG.warn("Returned null as Void")
             }

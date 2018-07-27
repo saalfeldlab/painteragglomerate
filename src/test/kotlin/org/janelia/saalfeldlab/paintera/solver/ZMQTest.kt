@@ -1,9 +1,5 @@
 package org.janelia.saalfeldlab.paintera.solver
 
-import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import gnu.trove.map.hash.TLongLongHashMap
-import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction
 import org.junit.Test
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
@@ -17,21 +13,7 @@ class ZMQTest {
 
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private val ACTION_ADDRESS = "ipc://ACTION"
-
-        private val SOLUTION_REQ_REP = "ipc://SOL_REQ_REP"
-
-        private val SOLUTION_DIST = "ipc://SOL_DIST"
-
         private val LATEST_SOL_ADDR = "ipc://LATEST_SOL"
-
-        private val MIN_WAIT_AFTER_LAST_ACTION = 100
-
-        private val INITIAL_SOLUTION = { TLongLongHashMap(longArrayOf(4), longArrayOf(2)) }
-
-        private val gson: Gson = GsonBuilder()
-                .registerTypeAdapter(AssignmentAction::class.java, AssignmentActionJsonAdapter())
-                .create()
     }
 
     @Test
@@ -50,7 +32,7 @@ class ZMQTest {
             val request = latestSolutionRequestSocket.recv(0)
             LOG.warn("Received request: {}", request)
             try {
-                null as? Void
+                null as? Void?
             } finally {
                 LOG.warn("Returned null as Void")
             }

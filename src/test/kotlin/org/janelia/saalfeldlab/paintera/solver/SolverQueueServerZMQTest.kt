@@ -16,6 +16,7 @@ import org.zeromq.ZMQ
 import java.io.IOException
 import java.lang.invoke.MethodHandles
 import java.nio.ByteBuffer
+import java.nio.charset.Charset
 import java.util.*
 
 class SolverQueueServerZMQTest {
@@ -25,15 +26,15 @@ class SolverQueueServerZMQTest {
 
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private val ACTION_ADDRESS = "ipc://ACTION"
+        private const val ACTION_ADDRESS = "ipc://ACTION"
 
-        private val SOLUTION_REQ_REP = "ipc://SOL_REQ_REP"
+        private const val SOLUTION_REQ_REP = "ipc://SOL_REQ_REP"
 
-        private val SOLUTION_DIST = "ipc://SOL_DIST"
+        private const val SOLUTION_DIST = "ipc://SOL_DIST"
 
-        private val LATEST_SOL_ADDR = "ipc://LATEST_SOL"
+        private const val LATEST_SOL_ADDR = "ipc://LATEST_SOL"
 
-        private val MIN_WAIT_AFTER_LAST_ACTION = 100
+        private const val MIN_WAIT_AFTER_LAST_ACTION = 100
 
         private val INITIAL_SOLUTION = { TLongLongHashMap(longArrayOf(4), longArrayOf(2)) }
 
@@ -59,7 +60,7 @@ class SolverQueueServerZMQTest {
             while (!Thread.interrupted()) {
 
                 LOG.warn("Waiting for message in thread {}", Thread.currentThread().name)
-                val msg = socket.recvStr()
+                val msg = socket.recvStr(Charset.defaultCharset())
                 LOG.warn("Received message in thread {}", Thread.currentThread().name)
                 //				System.out.println( "RECEIVED MSG " + msg );
 
@@ -68,12 +69,8 @@ class SolverQueueServerZMQTest {
 
                 for (action in incomingActions)
                     if (action is Merge) {
-                        val merge = action as Merge
-                        val ids = Pair(merge.fromFragmentId, merge.intoFragmentId)
-//                        for (i in ids.indices)
-//                            for (m in i + 1 until ids.size) {
-                        val f1 = merge.fromFragmentId
-                        val f2 = merge.intoFragmentId
+                        val f1 = action.fromFragmentId
+                        val f2 = action.intoFragmentId
 
                         if (!solution.contains(f1))
                             solution.put(f1, f1)
@@ -98,13 +95,12 @@ class SolverQueueServerZMQTest {
 //                            }
 
                     } else if (action is Detach) {
-                        val detach = action as Detach
-                        val id = detach.fragmentId
+                        val id = action.fragmentId
                         if (solution.contains(id))
                             solution.put(id, id)
                     }
 
-                val maxLabel = Arrays.stream(solution.keys()).reduce({ l, l1 -> java.lang.Long.max(l, l1) }).getAsLong()
+                val maxLabel = Arrays.stream(solution.keys()).reduce({ l, l1 -> java.lang.Long.max(l, l1) }).asLong
                 val mapping = LongArray((maxLabel + 1).toInt())
                 val response = ByteArray(mapping.size * java.lang.Long.BYTES)
                 Arrays.fill(mapping, -1)
@@ -171,7 +167,7 @@ class SolverQueueServerZMQTest {
             Thread.currentThread().name = "solutionSubscriptionThread"
             LOG.warn("Waiting for message")
             val msg = subscriptionSocket.recv()
-            LOG.warn("Received message ${msg}")
+            LOG.warn("Received message $msg")
             Assert.assertEquals(0, msg.size % (2 * java.lang.Long.BYTES))
             solutionSubscription.clear()
             val bb = ByteBuffer.wrap(msg)

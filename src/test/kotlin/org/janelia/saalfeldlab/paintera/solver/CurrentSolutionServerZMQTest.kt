@@ -23,11 +23,11 @@ class CurrentSolutionServerZMQTest {
     @Test
     fun test() {
 
-        val solutionRequestAddress: String = "ipc://SOLUTION_REQUEST"
-        val solutionSubscriptionAddress: String = "ipc://SOLUTION_SUBSCRIPTION"
-        val currentSolutionUpdatePublishAddress: String = "ipc://SOLUTION_PUBLISHER"
-        val solutionSubscriptionTopic: String = "SOLUTION_FROM_SERVER"
-        val currentSolutionUpdatePublishTopic: String = "SOLUTION_FROM_MIDDLE_MAN"
+        val solutionRequestAddress = "ipc://SOLUTION_REQUEST"
+        val solutionSubscriptionAddress = "ipc://SOLUTION_SUBSCRIPTION"
+        val currentSolutionUpdatePublishAddress = "ipc://SOLUTION_PUBLISHER"
+        val solutionSubscriptionTopic = "SOLUTION_FROM_SERVER"
+        val currentSolutionUpdatePublishTopic = "SOLUTION_FROM_MIDDLE_MAN"
 
 
         val context = ZMQ.context(1)

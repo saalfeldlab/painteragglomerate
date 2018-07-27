@@ -41,14 +41,14 @@ import java.util.regex.Pattern
 
 class PainterAgglomerate : Application() {
 
-    val viewer = PainteraBaseView.defaultView()
-    val pbv = viewer.baseView
-    val context = ZMQ.context(3)
+    private val viewer = PainteraBaseView.defaultView()
+    private val pbv = viewer.baseView
+    private val context = ZMQ.context(3)
 
     override fun start(primaryStage: Stage) {
 
 
-        val args = parameters.getRaw().toTypedArray();
+        val args = parameters.raw.toTypedArray()
 
         val cmdLineArgs = CmdLineArgs()
         val parsedSuccessfully = Optional.ofNullable(CommandLine.call(cmdLineArgs, System.err, *args)).orElse(false)
@@ -85,7 +85,14 @@ class PainterAgglomerate : Application() {
 
         cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
 
-        cmdLineArgs.labelSources.forEach({ Paintera.addLabelFromStringNoGenerics(pbv, it, projectDirectory, Paintera.GetAssignment { n5, dataset -> assignment }, Paintera.GetN5IDService({ n5, dataset -> idSelector })) })
+        cmdLineArgs.labelSources.forEach({
+            Paintera.addLabelFromStringNoGenerics(
+                    pbv,
+                    it,
+                    projectDirectory,
+                    { _, _ -> assignment },
+                    { _, _ -> idSelector })
+        })
 
         val scene = Scene(viewer.paneWithStatus.pane, 800.0, 600.0)
 
@@ -144,7 +151,7 @@ class PainterAgglomerate : Application() {
                             name)
 
                     pbv.addRawSource(state)
-                    return Optional.of(state.getDataSource())
+                    return Optional.of(state.dataSource)
                 } catch (e: Exception) {
                     throw e as? UnableToAddSource ?: UnableToAddSource(e)
                 }
@@ -180,7 +187,7 @@ class PainterAgglomerate : Application() {
                     val name = N5Helpers.lastSegmentOfDatasetPath(dataset)
                     val selectedIds = SelectedIds()
                     val idService = N5Helpers.idService(n5, dataset)
-                    val lockedSegments = LockedSegmentsOnlyLocal(Consumer { locked -> })
+                    val lockedSegments = LockedSegmentsOnlyLocal(Consumer { _ -> })
                     val stream = ModalGoldenAngleSaturatedHighlightingARGBStream(
                             selectedIds,
                             assignment,
@@ -202,12 +209,12 @@ class PainterAgglomerate : Application() {
 
                     val blockLoaders = Arrays
                             .stream(N5Helpers.labelMappingFromFileLoaderPattern(n5, dataset))
-                            .map<BlocksForLabelFromFile>(java.util.function.Function { BlocksForLabelFromFile(it) })
-                            .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { i -> null }) })
+                            .map<BlocksForLabelFromFile>({ BlocksForLabelFromFile(it) })
+                            .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { _ -> null }) })
 
                     val state = LabelSourceState<D, T>(
                             maskedSource,
-                            HighlightingStreamConverter.forType(stream, dataSource.getType()),
+                            HighlightingStreamConverter.forType(stream, dataSource.type),
                             ARGBCompositeAlphaYCbCr(),
                             name,
                             assignment,
