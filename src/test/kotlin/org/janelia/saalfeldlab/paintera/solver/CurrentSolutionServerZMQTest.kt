@@ -26,8 +26,8 @@ class CurrentSolutionServerZMQTest {
         val solutionRequestAddress: String = "ipc://SOLUTION_REQUEST"
         val solutionSubscriptionAddress: String = "ipc://SOLUTION_SUBSCRIPTION"
         val currentSolutionUpdatePublishAddress: String = "ipc://SOLUTION_PUBLISHER"
-        val solutionSubscriptionTopic: String = "SOL_SUB"
-        val currentSolutionUpdatePublishTopic: String = ""//""SOL_PUB"
+        val solutionSubscriptionTopic: String = "SOLUTION_FROM_SERVER"
+        val currentSolutionUpdatePublishTopic: String = "SOLUTION_FROM_MIDDLE_MAN"
 
 
         val context = ZMQ.context(1)
@@ -41,11 +41,18 @@ class CurrentSolutionServerZMQTest {
             val latch = CountDownLatch(1)
             val updatedLocalMap = TLongLongHashMap()
             Thread {
-                LOG.warn("Waiting for publication on topic `{}' at address `{}'", currentSolutionUpdatePublishTopic, currentSolutionUpdatePublishAddress)
-                val envelope = solutionSubscriberSocket.recvStr(Charset.defaultCharset())
-                LOG.warn("Received envelope `{}'", envelope)
-                updatedLocalMap.putAll(toMapFromSolverServer(solutionSubscriberSocket.recv()))
-                latch.countDown()
+                try {
+                    LOG.warn("Waiting for publication on topic `{}' at address `{}'", currentSolutionUpdatePublishTopic, currentSolutionUpdatePublishAddress)
+                    val envelope = solutionSubscriberSocket.recvStr(Charset.defaultCharset())
+                    LOG.warn("Received envelope `{}'", envelope)
+                    updatedLocalMap.putAll(toMapFromSolverServer(solutionSubscriberSocket.recv()))
+                } catch (e: Exception) {
+                    LOG.warn("Caught exception {}", e)
+                    throw e
+                }
+                finally {
+                    latch.countDown()
+                }
             }.start()
 
             val server = CurrentSolutionServerZMQ(
