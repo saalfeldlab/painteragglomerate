@@ -80,7 +80,7 @@ class ActionsMiddleManZMQWithDirectActionSubmissionTest {
 
         actionsMiddleMan.addActions(actionList)
 
-        Thread.sleep(1500)
+        Thread.sleep(1000)
 
         actionsMiddleMan.close()
         serverActionsSocket.close()

@@ -87,7 +87,7 @@ class ActionsMiddleManZMQTest {
         actionList.forEach({jsonActions.add(gson.toJsonTree(it, AssignmentAction::class.java))})
         clientActionsSocket.send(gson.toJson(jsonActions).toByteArray(Charset.defaultCharset()), 0)
 
-        Thread.sleep(1500)
+        Thread.sleep(1000)
 
         actionsMiddleMan.close()
         serverActionsSocket.close()
