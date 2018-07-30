@@ -16,7 +16,7 @@ import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaYCbCr
 import org.janelia.saalfeldlab.paintera.composition.CompositeCopy
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentState
 import org.janelia.saalfeldlab.paintera.control.assignment.ServerClientFragmentSegmentAssignment
-import org.janelia.saalfeldlab.paintera.control.assignment.ZMQAssignmentActionBroadcaster
+import org.janelia.saalfeldlab.paintera.control.assignment.ZMQAssignmentActionBroadcasterActionsHandler
 import org.janelia.saalfeldlab.paintera.control.assignment.ZMQSolutionFetcher
 import org.janelia.saalfeldlab.paintera.control.lock.LockedSegmentsOnlyLocal
 import org.janelia.saalfeldlab.paintera.control.selection.SelectedIds
@@ -81,7 +81,9 @@ class PainterAgglomerate : Application() {
 
         val idSelector = IdSelectorZMQ(idRequestAddress, context)
 
-        val assignment = ServerClientFragmentSegmentAssignment(ZMQAssignmentActionBroadcaster(context, actionReceiverAddress), ZMQSolutionFetcher(context, latestSolutionRequestAddress))
+        val assignment = ServerClientFragmentSegmentAssignment(
+                ZMQAssignmentActionBroadcasterActionsHandler(context, actionReceiverAddress),
+                ZMQSolutionFetcher(context, latestSolutionRequestAddress))
 
         cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
 
