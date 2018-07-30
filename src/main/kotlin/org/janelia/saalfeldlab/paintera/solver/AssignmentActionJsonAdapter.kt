@@ -18,11 +18,11 @@ class AssignmentActionJsonAdapter : JsonSerializer<AssignmentAction>, JsonDeseri
     }
 
     override fun deserialize(json: JsonElement, typeOfT: Type, context: JsonDeserializationContext): AssignmentAction {
-        LOG.warn("Deserializing {}", json)
+        LOG.debug("Deserializing {}", json)
         val obj = json.asJsonObject
         val type: AssignmentAction.Type = context.deserialize(obj.get(TYPE_KEY), AssignmentAction.Type::class.java)
         val deserialized: AssignmentAction = context.deserialize(obj.get(DATA_KEY), type.classForType)
-        LOG.warn("Deserialized {}", deserialized)
+        LOG.debug("Deserialized {}", deserialized)
         return deserialized
     }
 
