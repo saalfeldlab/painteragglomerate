@@ -27,6 +27,8 @@ class CurrentSolutionMiddleManZMQ(
 
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
+
+        const val CURRENT_SOLUTION_REQUEST_ENDPOINT = "/request/solution"
     }
 
     private var currentSolution = TLongLongHashMap()
@@ -42,7 +44,7 @@ class CurrentSolutionMiddleManZMQ(
 
     init {
         LOG.debug("Requesting initial solution at address {}", solutionRequestAddress)
-        solutionRequestSocket.send("")
+        solutionRequestSocket.send(CURRENT_SOLUTION_REQUEST_ENDPOINT)
         LOG.debug("Requested initial solution at address {}", solutionRequestAddress)
         val initialSolutionAsBytes = solutionRequestSocket.recv()
         LOG.debug("Updating initial solution from bytes {}", initialSolutionAsBytes)
@@ -52,7 +54,7 @@ class CurrentSolutionMiddleManZMQ(
 
     @Throws(CurrentSolutionMiddleMan.UnableToUpdate::class)
     override fun updateCurrentSolution() {
-        val sentSuccessfully = solutionRequestSocket.send("")
+        val sentSuccessfully = solutionRequestSocket.send(CURRENT_SOLUTION_REQUEST_ENDPOINT)
 
         if (!sentSuccessfully)
             throw CurrentSolutionMiddleMan.UnableToUpdate()

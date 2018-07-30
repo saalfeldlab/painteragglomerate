@@ -47,9 +47,9 @@ class CurrentSolutionServerZMQTest {
             Thread.currentThread().name = "solution-response-thread"
             while (!Thread.currentThread().isInterrupted()) {
                 LOG.debug("Waiting for solution request at address {}", solutionRequestAddress)
-                val request: ByteArray? = solutionResponseSocket.recv()
+                val request = solutionResponseSocket.recvStr(Charset.defaultCharset())
                 LOG.debug("Got request {}", request)
-                if (request != null)
+                if (request != null && request.equals(CurrentSolutionMiddleManZMQ.CURRENT_SOLUTION_REQUEST_ENDPOINT))
                     solutionResponseSocket.send(toBytesFromMap(updatedLocalMap), 0)
             }
             LOG.debug("Finished iterating in solutionResponseThread")
