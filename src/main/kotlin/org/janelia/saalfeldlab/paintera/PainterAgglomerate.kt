@@ -8,8 +8,9 @@ import javafx.stage.Stage
 import net.imglib2.Volatile
 import net.imglib2.converter.ARGBColorConverter
 import net.imglib2.type.NativeType
+import net.imglib2.type.label.LabelMultisetType
+import net.imglib2.type.label.VolatileLabelMultisetType
 import net.imglib2.type.numeric.ARGBType
-import net.imglib2.type.numeric.IntegerType
 import net.imglib2.type.numeric.RealType
 import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaYCbCr
 import org.janelia.saalfeldlab.paintera.composition.CompositeCopy
@@ -22,6 +23,7 @@ import org.janelia.saalfeldlab.paintera.data.DataSource
 import org.janelia.saalfeldlab.paintera.data.mask.Masks
 import org.janelia.saalfeldlab.paintera.data.n5.CommitCanvasN5
 import org.janelia.saalfeldlab.paintera.id.IdSelectorZMQ
+import org.janelia.saalfeldlab.paintera.id.IdService
 import org.janelia.saalfeldlab.paintera.meshes.cache.BlocksForLabelFromFile
 import org.janelia.saalfeldlab.paintera.solver.CurrentSolutionZMQ
 import org.janelia.saalfeldlab.paintera.state.LabelSourceState
@@ -72,12 +74,12 @@ class PainterAgglomerate : Application() {
             cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
 
             cmdLineArgs.labelSources.forEach({
-                Paintera.addLabelFromStringNoGenerics(
+                addLabelFromString(
                         pbv,
                         it,
                         projectDirectory,
-                        { _, _ -> assignment },
-                        { _, _ -> idSelector })
+                        assignment,
+                        idSelector)
             })
 
             val scene = Scene(viewer.paneWithStatus.pane, 800.0, 600.0)
@@ -151,38 +153,46 @@ class PainterAgglomerate : Application() {
             LOG.warn("Unable to generate raw source from {}", identifier)
             return Optional.empty()
         }
-
         @Throws(UnableToAddSource::class)
-        private fun <D, T> addLabelFromString(
+        private fun addLabelFromString(
                 pbv: PainteraBaseView,
                 identifier: String,
                 projectDirectory: String,
-                assignment: FragmentSegmentAssignmentState
-        ) where D : NativeType<D>, D : IntegerType<D>, T : NativeType<T> {
+                assignment: FragmentSegmentAssignmentState,
+                idService : IdService
+        ) {
             if (!Pattern.matches("^[a-z]+://.+", identifier)) {
-                addLabelFromString<D, T>(pbv, "file://$identifier", projectDirectory, assignment)
+                addLabelFromString(pbv, "file://$identifier", projectDirectory, assignment, idService)
                 return
             }
 
-            if (Pattern.matches("^file://.+", identifier)) {
+            if (Pattern.matches("^(file|n5|h5)://.+", identifier)) {
                 try {
-                    val split = identifier.replaceFirst("file://".toRegex(), "").split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
-                    val n5 = N5Helpers.n5Writer(split[0], 64, 64, 64)
-                    val dataset = split[1]
-                    LOG.warn("Adding label dataset={} dataset={}", split[0], dataset)
-                    val resolution = N5Helpers.getResolution(n5, dataset)
-                    val offset = N5Helpers.getOffset(n5, dataset)
+                    val split = identifier.replaceFirst("(file|n5|h5)://".toRegex(), "").split(":".toRegex()).dropLastWhile { it.isEmpty() }.toTypedArray()
+                    val root = split[0]
+                    val n5 = N5Helpers.n5Writer(root, 64, 64, 64)
+                    val group = split[1]
+                    if (N5Helpers.isHDF(root))
+                        throw IllegalArgumentException("Can only handle N5FS!")
+                    val isPainteraDataset = N5Helpers.isPainteraDataset(n5, group)
+                    val dataset = if (isPainteraDataset) "$group/data" else group
+                    val isMultiScale = N5Helpers.isMultiScale(n5, dataset)
+                    val isLabelMultisetType = N5Helpers.isLabelMultisetType(n5, dataset, isMultiScale)
+                    if (!isLabelMultisetType)
+                        throw IllegalArgumentException("Can only handle LabelMultisetType!")
+                    LOG.warn("Adding label dataset={} dataset={}", split[0], group)
+                    val resolution = N5Helpers.getResolution(n5, group)
+                    val offset = N5Helpers.getOffset(n5, group)
                     val transform = N5Helpers.fromResolutionAndOffset(resolution, offset)
                     val nextCanvasDir = Masks.canvasTmpDirDirectorySupplier(projectDirectory)
-                    val name = N5Helpers.lastSegmentOfDatasetPath(dataset)
+                    val name = N5Helpers.lastSegmentOfDatasetPath(group)
                     val selectedIds = SelectedIds()
-                    val idService = N5Helpers.idService(n5, dataset)
                     val lockedSegments = LockedSegmentsOnlyLocal(Consumer { _ -> })
                     val stream = ModalGoldenAngleSaturatedHighlightingARGBStream(
                             selectedIds,
                             assignment,
                             lockedSegments)
-                    val dataSource = N5Helpers.openAsLabelSource<D, T>(
+                    val dataSource = N5Helpers.openAsLabelSource<LabelMultisetType, VolatileLabelMultisetType>(
                             n5,
                             dataset,
                             transform,
@@ -202,7 +212,7 @@ class PainterAgglomerate : Application() {
                             .map<BlocksForLabelFromFile>({ BlocksForLabelFromFile(it) })
                             .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { _ -> null }) })
 
-                    val state = LabelSourceState<D, T>(
+                    val state = LabelSourceState<LabelMultisetType, VolatileLabelMultisetType>(
                             maskedSource,
                             HighlightingStreamConverter.forType(stream, dataSource.type),
                             ARGBCompositeAlphaYCbCr(),
