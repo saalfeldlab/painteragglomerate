@@ -16,11 +16,18 @@ import java.util.*
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
-import java.util.function.Supplier
+import java.util.function.Consumer
 
-class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster, val solutionFetcher: Supplier<TLongLongHashMap>) : ObservableWithListenersList(), FragmentSegmentAssignmentState {
+class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster) :
+        ObservableWithListenersList(), FragmentSegmentAssignmentState, Consumer<TLongLongHashMap> {
+
     override fun persist() {
         LOG.debug("Nothing to persist here.")
+    }
+
+    override fun accept(solution: TLongLongHashMap)
+    {
+        applySolution(solution)
     }
 
     // https://github.com/saalfeldlab/bigcat/tree/8daba4571b5f1f3b6616c0db625332cf18091a64
@@ -43,29 +50,25 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
 
     init {
 
-        fetchAndApplySolution()
         stateChanged()
         receiveThread.scheduleWithFixedDelay({
-            fetchAndApplySolution()
             synchronized(this) {
                 history.removeAll(submittedActions)
                 submittedActions.clear()
                 history.forEach(::applyOnly)
             }
-            stateChanged()
         }, 0, 10, TimeUnit.MILLISECONDS)
 
     }
 
-    private fun fetchAndApplySolution(): Boolean {
-        LOG.warn("Fetching solution")
-        val initialSolution = solutionFetcher.get()
-        LOG.warn("Got solution {}", initialSolution)
+    private fun applySolution(solution: TLongLongHashMap): Boolean {
+        LOG.warn("Got solution {}", solution)
         synchronized(this) {
             fragmentToSegmentMap.clear()
-            fragmentToSegmentMap.putAll(initialSolution)
+            fragmentToSegmentMap.putAll(solution)
             syncILut()
         }
+        stateChanged()
         return true
     }
 

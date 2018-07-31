@@ -1,6 +1,5 @@
 package org.janelia.saalfeldlab.paintera
 
-import gnu.trove.map.hash.TLongLongHashMap
 import javafx.application.Application
 import javafx.application.Platform
 import javafx.scene.Scene
@@ -17,7 +16,6 @@ import org.janelia.saalfeldlab.paintera.composition.CompositeCopy
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentState
 import org.janelia.saalfeldlab.paintera.control.assignment.ServerClientFragmentSegmentAssignment
 import org.janelia.saalfeldlab.paintera.control.assignment.ZMQAssignmentActionBroadcasterActionsHandler
-import org.janelia.saalfeldlab.paintera.control.assignment.ZMQSolutionFetcher
 import org.janelia.saalfeldlab.paintera.control.lock.LockedSegmentsOnlyLocal
 import org.janelia.saalfeldlab.paintera.control.selection.SelectedIds
 import org.janelia.saalfeldlab.paintera.data.DataSource
@@ -25,7 +23,7 @@ import org.janelia.saalfeldlab.paintera.data.mask.Masks
 import org.janelia.saalfeldlab.paintera.data.n5.CommitCanvasN5
 import org.janelia.saalfeldlab.paintera.id.IdSelectorZMQ
 import org.janelia.saalfeldlab.paintera.meshes.cache.BlocksForLabelFromFile
-import org.janelia.saalfeldlab.paintera.solver.SolverQueueServerZMQ
+import org.janelia.saalfeldlab.paintera.solver.CurrentSolutionZMQ
 import org.janelia.saalfeldlab.paintera.state.LabelSourceState
 import org.janelia.saalfeldlab.paintera.state.RawSourceState
 import org.janelia.saalfeldlab.paintera.stream.HighlightingStreamConverter
@@ -36,78 +34,68 @@ import picocli.CommandLine
 import java.lang.invoke.MethodHandles
 import java.util.*
 import java.util.function.Consumer
-import java.util.function.Supplier
 import java.util.regex.Pattern
 
 class PainterAgglomerate : Application() {
 
     private val viewer = PainteraBaseView.defaultView()
     private val pbv = viewer.baseView
-    private val context = ZMQ.context(3)
+    private val context = ZMQ.context(1)
 
     override fun start(primaryStage: Stage) {
 
 
-        val args = parameters.raw.toTypedArray()
+        try {
+            val args = parameters.raw.toTypedArray()
 
-        val cmdLineArgs = CmdLineArgs()
-        val parsedSuccessfully = Optional.ofNullable(CommandLine.call(cmdLineArgs, System.err, *args)).orElse(false)
+            val cmdLineArgs = CmdLineArgs()
+            val parsedSuccessfully = Optional.ofNullable(CommandLine.call(cmdLineArgs, System.err, *args)).orElse(false)
 
-        if (!parsedSuccessfully) {
-            return
+            if (!parsedSuccessfully) {
+                return
+            }
+
+            val projectDirectory = cmdLineArgs.project() ?: createTempDir("painteragglomerate").absolutePath
+
+            Platform.setImplicitExit(true)
+
+            // TODO("Define these addresses")
+            val solverServerAddress = "ipc:///tmp/mc-solver"
+            val solutionDistributionAddress = "ipc:///tmp/current-solution"
+
+            val idSelector = IdSelectorZMQ(solverServerAddress, context)
+
+            val assignment = ServerClientFragmentSegmentAssignment(ZMQAssignmentActionBroadcasterActionsHandler(context, solverServerAddress))
+            val solutionFetcher = CurrentSolutionZMQ(context, solverServerAddress, solutionDistributionAddress, "solution", 500, assignment)
+            assignment.accept(solutionFetcher.currentSolution())
+
+            cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
+
+            cmdLineArgs.labelSources.forEach({
+                Paintera.addLabelFromStringNoGenerics(
+                        pbv,
+                        it,
+                        projectDirectory,
+                        { _, _ -> assignment },
+                        { _, _ -> idSelector })
+            })
+
+            val scene = Scene(viewer.paneWithStatus.pane, 800.0, 600.0)
+
+            viewer.keyTracker.installInto(scene)
+            scene.addEventFilter(MouseEvent.ANY, viewer.mouseTracker)
+            Platform.setImplicitExit(true)
+
+            primaryStage.scene = scene
+            primaryStage.show()
+        } catch (e: Exception)
+        {
+            LOG.error("Caught exception in start-up!", e)
         }
-
-        val projectDirectory = cmdLineArgs.project() ?: createTempDir("painteragglomerate").absolutePath
-
-        Platform.setImplicitExit(true)
-
-        // TODO("Define these addresses")
-        val actionReceiverAddress = "ipc://assignment-actions"
-        val solutionRequestResponseAddress = "ipc:///tmp/mc-solver"
-        val solutionDistributionAddress = "ipc://solution"
-        val initialSolution = Supplier { TLongLongHashMap() }
-        val latestSolutionRequestAddress = "ipc://latest-solution-request"
-        val idRequestAddress = "ipc://id-service"
-
-        val solverQueue = SolverQueueServerZMQ(
-                actionReceiverAddress,
-                solutionRequestResponseAddress,
-                solutionDistributionAddress,
-                initialSolution,
-                latestSolutionRequestAddress,
-                3,
-                10
-        )
-
-        val idSelector = IdSelectorZMQ(idRequestAddress, context)
-
-        val assignment = ServerClientFragmentSegmentAssignment(
-                ZMQAssignmentActionBroadcasterActionsHandler(context, actionReceiverAddress),
-                ZMQSolutionFetcher(context, latestSolutionRequestAddress))
-
-        cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
-
-        cmdLineArgs.labelSources.forEach({
-            Paintera.addLabelFromStringNoGenerics(
-                    pbv,
-                    it,
-                    projectDirectory,
-                    { _, _ -> assignment },
-                    { _, _ -> idSelector })
-        })
-
-        val scene = Scene(viewer.paneWithStatus.pane, 800.0, 600.0)
-
-        viewer.keyTracker.installInto(scene)
-        scene.addEventFilter(MouseEvent.ANY, viewer.mouseTracker)
-        Platform.setImplicitExit(true)
-
-        primaryStage.scene = scene
-        primaryStage.show()
     }
 
     override fun stop() {
-        LOG.debug("Stopping application")
+        LOG.warn("Stopping application")
         pbv.stop()
         context.close()
     }

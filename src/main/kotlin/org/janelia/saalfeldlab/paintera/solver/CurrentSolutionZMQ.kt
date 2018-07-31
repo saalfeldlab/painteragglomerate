@@ -99,7 +99,7 @@ class CurrentSolutionZMQ(
     }
 
     private class ServerSolutionSubscriber(
-            context: ZMQ.Context,
+            private val context: ZMQ.Context,
             private val address: String,
             private val topic: String,
             private val updateSolutionFromByteArray: (ByteArray) -> Unit,
