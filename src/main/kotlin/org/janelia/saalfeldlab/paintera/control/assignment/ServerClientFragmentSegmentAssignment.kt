@@ -17,8 +17,9 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.function.Consumer
+import java.util.function.LongSupplier
 
-class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBroadcaster) :
+class ServerClientFragmentSegmentAssignment(private val broadcaster: AssignmentActionBroadcaster) :
         ObservableWithListenersList(), FragmentSegmentAssignmentState, Consumer<TLongLongHashMap> {
 
     override fun persist() {
@@ -92,6 +93,7 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
     override fun apply(action: AssignmentAction) {
         history.add(action)
         submittedActions.add(action)
+        LOG.warn("Broadcasting action {}", action)
         broadcaster.broadcast(action)
         applyOnly(action)
         stateChanged()
@@ -210,6 +212,47 @@ class ServerClientFragmentSegmentAssignment(val broadcaster: AssignmentActionBro
                 this.segmentToFragmentsMap.remove(segmentFrom)
             }
         }
+    }
+
+    override fun getMergeAction(
+            from: Long,
+            into: Long,
+            newSegmentId: LongSupplier): Optional<Merge> {
+        if (from == into) {
+            LOG.debug("fragments {} {} are the same -- no action necessary", from, into)
+            return Optional.empty()
+        }
+
+        if (getSegment(from) == getSegment(into)) {
+            LOG.debug(
+                    "fragments {} {} are in the same segment {} {} -- no action necessary",
+                    from,
+                    into,
+                    getSegment(from),
+                    getSegment(into)
+            )
+            return Optional.empty()
+        }
+
+        // TODO do not add to fragmentToSegmentMap here. Have the mergeImpl take
+        // care of it instead.
+        if (getSegment(into) == into) {
+            fragmentToSegmentMap.put(into, into)
+        }
+
+        val merge = Merge(from, into, fragmentToSegmentMap.get(into))
+        return Optional.of(merge)
+    }
+
+    override fun getDetachAction(fragmentId: Long, from: Long): Optional<Detach> {
+
+        if (fragmentId == from) {
+            LOG.debug("{} and {} ar the same -- no action necessary", fragmentId, from)
+            return Optional.empty()
+        }
+
+        return Optional.ofNullable(Detach(fragmentId, from))
+
     }
 
 
