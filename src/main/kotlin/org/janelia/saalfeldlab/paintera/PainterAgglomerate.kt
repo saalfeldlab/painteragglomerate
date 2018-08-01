@@ -208,7 +208,7 @@ class PainterAgglomerate : Application() {
                             pbv.propagationQueue)
 
                     val blockLoaders = Arrays
-                            .stream(N5Helpers.labelMappingFromFileLoaderPattern(n5, dataset))
+                            .stream(N5Helpers.labelMappingFromFileLoaderPattern(n5, group))
                             .map<BlocksForLabelFromFile>({ BlocksForLabelFromFile(it) })
                             .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { _ -> null }) })
 
