@@ -69,9 +69,9 @@ class ActionsMiddleManZMQWithDirectActionSubmissionTest {
         val serverActionsThread = Thread{
             val endpoint = serverActionsSocket.socket.recvStr(Charset.defaultCharset())!! // ?: continue
             LOG.debug("Received endpoint {}", endpoint)
-            Assert.assertEquals(ActionsMiddleManZMQ.SUBMIT_ACTIONS_ENDPOINT, endpoint)
+            Assert.assertEquals(ActionsMiddleManZMQWithDirectActionSubmission.SUBMIT_ACTIONS_ENDPOINT, endpoint)
             val jsonString = serverActionsSocket.socket.recvStr(Charset.defaultCharset())!!
-            val jsonActions = gson.fromJson(jsonString, JsonObject::class.java).get(ActionsMiddleManZMQ.ACTIONS_KEY).asJsonArray
+            val jsonActions = gson.fromJson(jsonString, JsonObject::class.java).get(ActionsMiddleManZMQWithDirectActionSubmission.ACTIONS_KEY).asJsonArray
             serverActionsSocket.socket.send(ByteBuffer.allocate(java.lang.Integer.BYTES).putInt(jsonActions.size()).array(), 0)
             LOG.debug("Received actions: {}", jsonActions)
             jsonActions.forEach({serverActions.add(gson.fromJson(it, AssignmentAction::class.java))})
