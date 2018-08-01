@@ -8,11 +8,11 @@ fun toMapFromSolverServer(data: ByteArray): TLongLongHashMap
 {
     assert(isArraySizeValid(data))
 
-    val bb = ByteBuffer.wrap(data)
+    val bb = ByteBuffer.wrap(data).asLongBuffer()
     val map = TLongLongHashMap()
-    while(bb.hasRemaining())
+    for (i in 0 until bb.capacity())
     {
-        map.put(bb.long, bb.long)
+        map.put(i.toLong(), bb.get())
     }
     return map
 }
