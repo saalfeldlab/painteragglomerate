@@ -5,6 +5,7 @@ import javafx.application.Platform
 import javafx.scene.Scene
 import javafx.scene.input.MouseEvent
 import javafx.stage.Stage
+import net.imglib2.Interval
 import net.imglib2.Volatile
 import net.imglib2.converter.ARGBColorConverter
 import net.imglib2.type.NativeType
@@ -22,14 +23,19 @@ import org.janelia.saalfeldlab.paintera.control.selection.SelectedIds
 import org.janelia.saalfeldlab.paintera.data.DataSource
 import org.janelia.saalfeldlab.paintera.data.mask.Masks
 import org.janelia.saalfeldlab.paintera.data.n5.CommitCanvasN5
+import org.janelia.saalfeldlab.paintera.data.n5.N5DataSource
+import org.janelia.saalfeldlab.paintera.data.n5.N5Meta
 import org.janelia.saalfeldlab.paintera.id.IdSelectorZMQ
 import org.janelia.saalfeldlab.paintera.id.IdService
-import org.janelia.saalfeldlab.paintera.meshes.cache.BlocksForLabelFromFile
+import org.janelia.saalfeldlab.paintera.meshes.InterruptibleFunction
+import org.janelia.saalfeldlab.paintera.meshes.MeshManagerWithAssignmentForSegments
 import org.janelia.saalfeldlab.paintera.solver.CurrentSolutionZMQ
 import org.janelia.saalfeldlab.paintera.state.LabelSourceState
 import org.janelia.saalfeldlab.paintera.state.RawSourceState
 import org.janelia.saalfeldlab.paintera.stream.HighlightingStreamConverter
 import org.janelia.saalfeldlab.paintera.stream.ModalGoldenAngleSaturatedHighlightingARGBStream
+import org.janelia.saalfeldlab.util.MakeUnchecked
+import org.janelia.saalfeldlab.util.n5.N5Helpers
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import picocli.CommandLine
@@ -37,6 +43,8 @@ import java.lang.invoke.MethodHandles
 import java.util.*
 import java.util.function.Consumer
 import java.util.regex.Pattern
+import java.util.stream.Collectors
+import java.util.stream.IntStream
 
 class PainterAgglomerate : Application() {
 
@@ -128,13 +136,12 @@ class PainterAgglomerate : Application() {
                     val dataset = split[1]
                     val name = N5Helpers.lastSegmentOfDatasetPath(dataset)
 
-                    val source = N5Helpers.openRawAsSource<D, T, Any>(
-                            reader,
-                            dataset,
+                    val source = N5DataSource<D, T>(
+                            N5Meta.fromReader(reader, dataset),
                             N5Helpers.getTransform(reader, dataset),
-                            pbv.queue,
-                            0,
-                            name)
+                            pbv.globalCache,
+                            name,
+                            0)
 
                     val state = RawSourceState<D, T>(
                             source,
@@ -177,7 +184,7 @@ class PainterAgglomerate : Application() {
                     val isPainteraDataset = N5Helpers.isPainteraDataset(n5, group)
                     val dataset = if (isPainteraDataset) "$group/data" else group
                     val isMultiScale = N5Helpers.isMultiScale(n5, dataset)
-                    val isLabelMultisetType = N5Helpers.isLabelMultisetType(n5, dataset, isMultiScale)
+                    val isLabelMultisetType = N5Helpers.getBooleanAttribute(n5, if (isMultiScale) dataset + "/s0" else dataset, N5Helpers.IS_LABEL_MULTISET_KEY, false)
                     if (!isLabelMultisetType)
                         throw IllegalArgumentException("Can only handle LabelMultisetType!")
                     LOG.warn("Adding label dataset={} dataset={}", split[0], group)
@@ -192,13 +199,12 @@ class PainterAgglomerate : Application() {
                             selectedIds,
                             assignment,
                             lockedSegments)
-                    val dataSource = N5Helpers.openAsLabelSource<LabelMultisetType, VolatileLabelMultisetType>(
-                            n5,
-                            dataset,
+                    val dataSource = N5DataSource<LabelMultisetType, VolatileLabelMultisetType>(
+                            N5Meta.fromReader(n5, dataset),
                             transform,
-                            pbv.queue,
-                            0,
-                            name)
+                            pbv.globalCache,
+                            name,
+                            0)
 
                     val maskedSource = Masks.mask(
                             dataSource,
@@ -207,10 +213,32 @@ class PainterAgglomerate : Application() {
                             CommitCanvasN5(n5, dataset),
                             pbv.propagationQueue)
 
-                    val blockLoaders = Arrays
-                            .stream(N5Helpers.labelMappingFromFileLoaderPattern(n5, group))
-                            .map<BlocksForLabelFromFile>({ BlocksForLabelFromFile(it) })
-                            .toArray<BlocksForLabelFromFile>({ n: Int -> Array<BlocksForLabelFromFile?>(n, { _ -> null }) })
+                    val lookup = N5Helpers.getLabelBlockLookup(n5, group)
+                    val blockLoadersFactory = { level: Int ->
+                        InterruptibleFunction.fromFunction(
+                                MakeUnchecked.function<Long, Array<Interval>>(
+                                        { lookup.read(level, it!!) },
+                                        { LOG.debug("Falling back to empty array");arrayOf()}
+                                ));
+                    }
+
+                    val blockLookup = IntStream
+                            .range(0, dataSource.numMipmapLevels)
+                            .mapToObj(blockLoadersFactory)
+                            .collect(Collectors.toList())
+                            .toTypedArray()
+
+                    val meshManager = MeshManagerWithAssignmentForSegments.fromBlockLookup(
+                            maskedSource,
+                            selectedIds,
+                            assignment,
+                            stream,
+                            pbv.viewer3D().meshesGroup(),
+                            blockLookup,
+                            pbv.globalCache::createNewCache,
+                            pbv.meshManagerExecutorService,
+                            pbv.meshWorkerExecutorService
+                            )
 
                     val state = LabelSourceState<LabelMultisetType, VolatileLabelMultisetType>(
                             maskedSource,
@@ -221,10 +249,8 @@ class PainterAgglomerate : Application() {
                             lockedSegments,
                             idService,
                             selectedIds,
-                            pbv.viewer3D().meshesGroup(),
-                            blockLoaders,
-                            pbv.meshManagerExecutorService,
-                            pbv.meshWorkerExecutorService)
+                            meshManager,
+                            lookup)
                     pbv.addLabelSource(state)
                 } catch (e: Exception) {
                     throw e as? UnableToAddSource ?: UnableToAddSource(e)
