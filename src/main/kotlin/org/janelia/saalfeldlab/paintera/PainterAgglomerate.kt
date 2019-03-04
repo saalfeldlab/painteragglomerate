@@ -79,7 +79,7 @@ class PainterAgglomerate : Application() {
             val solutionFetcher = CurrentSolutionZMQ(context, solverServerAddress, solutionDistributionAddress, "solution", 500, assignment)
             assignment.accept(solutionFetcher.currentSolution())
 
-            cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
+//            cmdLineArgs.rawSources.forEachIndexed({ index, rs -> Paintera.addRawFromStringNoGenerics(pbv, rs, if (index == 0) CompositeCopy<ARGBType>() else ARGBCompositeAlphaYCbCr()) })
 
             cmdLineArgs.labelSources.forEach({
                 addLabelFromString(
