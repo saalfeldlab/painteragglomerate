@@ -1,27 +1,23 @@
 package org.janelia.saalfeldlab.paintera.control.assignment
 
-import gnu.trove.list.array.TByteArrayList
 import gnu.trove.map.TLongIntMap
 import gnu.trove.map.TLongObjectMap
 import gnu.trove.map.hash.TLongIntHashMap
 import gnu.trove.map.hash.TLongLongHashMap
 import gnu.trove.map.hash.TLongObjectHashMap
 import gnu.trove.set.hash.TLongHashSet
-import javafx.beans.InvalidationListener
 import net.imglib2.util.StopWatch
 import org.janelia.saalfeldlab.fx.ObservableWithListenersList
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction
 import org.janelia.saalfeldlab.paintera.id.IdService
-import org.janelia.saalfeldlab.paintera.util.zmq.sockets.toBytes
+import org.janelia.saalfeldlab.paintera.util.zmq.sockets.*
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import java.io.Closeable
-import java.lang.Exception
 import java.lang.invoke.MethodHandles
-import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
-import java.util.Arrays
+import java.util.*
 import kotlin.math.sqrt
 
 private object codes {
@@ -45,6 +41,20 @@ private object codes {
         }
     }
 
+    object solutionState {
+        val SUCCESS                       = 0
+        val NO_LABEL_FOR_SOME_CLASSES     = 1
+        val RANDOM_FOREST_TRAINING_FAILED = 2
+        val MC_OPTIMIZATION_FAILED        = 3
+        val UNKNOWN_ERRROR                = 4
+    }
+
+    object requestSolutionUpdate {
+        object responseCodes {
+            val _SOLUTION_UPDATE_REQUEST_RECEIVED = 0
+        }
+    }
+
 
 }
 
@@ -60,6 +70,35 @@ data class LabeledEdge(val edge: Edge, val label: Int) {
     }
 }
 
+class SolutionUpdateSubscriber(
+        context: ZMQ.Context,
+        val address: String,
+        val onNewSolution: (Int, Int) -> Any,
+        recvTimeout: Int = -1): Thread(), Closeable {
+
+    val socket: ZMQ.Socket
+    private var keepListening = true
+
+    init {
+        isDaemon = true
+        socket = subscriberSocket(context, address, receiveTimeout = recvTimeout)
+        start()
+    }
+
+    override fun run() {
+        while(keepListening) {
+            val newSolution = socket.recv()?.toInts()
+            if (newSolution != null && newSolution.size == 2)
+                onNewSolution(newSolution[0], newSolution[1])
+        }
+    }
+
+    override fun close() {
+        keepListening = false
+    }
+
+}
+
 class FragmentSegmentAssignmentPias(
         val piasAddress: String,
         val idService: IdService,
@@ -72,6 +111,8 @@ class FragmentSegmentAssignmentPias(
     private val lastFragmentLabel = TLongIntHashMap()
     private val positiveEamples = TLongLongHashMap()
     private val negativeExamples = TLongLongHashMap()
+    private val newSolutionListeners = mutableListOf<(Int) -> Any>()
+    private val solutionSubscriber = SolutionUpdateSubscriber(context, newSolutionSubscriptionAddress(), this::notifyNewSolution, recvTimeout = 50)
 
     private var lookup = Lookup()
 
@@ -156,6 +197,15 @@ class FragmentSegmentAssignmentPias(
 
     }
 
+    private fun notifyNewSolution(solutionId: Int, exitCode: Int) {
+        when (exitCode) {
+            codes.solutionState.SUCCESS -> newSolutionListeners.forEach { it(solutionId) }
+            else -> LOG.info("Latest solution failed with code {}", exitCode)
+        }
+    }
+
+    fun addNewSolutionListener(listener: (Int) -> Any) = this.newSolutionListeners.add(listener)
+
     // TODO maybe throw exception is more informative than true/false
     fun updateSolution(recvTimeout: Int = -1, sendTimeout: Int = -1): Boolean {
         val socket = context.socket(ZMQ.REQ)
@@ -176,8 +226,20 @@ class FragmentSegmentAssignmentPias(
         } ?: false
     }
 
+    fun requestUpdateSolution(recvTimeout: Int = -1, sendTimeout: Int = -1): Int? {
+        val socket = clientSocket(context, address = requestSolutionUpdateAddress(), receiveTimeout = recvTimeout, sendTimeout = sendTimeout)
+        socket.send("")
+        val responseCode = socket.recv()?.toInt() ?: Exception("Did not receive response within $recvTimeout")
+        when (responseCode) {
+            codes.requestSolutionUpdate.responseCodes._SOLUTION_UPDATE_REQUEST_RECEIVED -> {socket.recv()!!.toInt().let{LOG.info("Received solution request and will generate new solution with id $it"); it}}
+            else -> throw Exception("Do not understand response code $responseCode")
+        }
+        return null
+    }
+
     fun setEdgeLabels(labels: Collection<LabeledEdge>, recvTimeout: Int = -1, sendTimeout: Int = -1) {
 
+        LOG.info("Setting edge labels {}", labels)
         val socket = createSocket(context, ZMQ.REQ, recvTimeout = recvTimeout, sendTimeout = sendTimeout)
         val address = setEdgeLabelsAddress()
         LOG.info("Connecting set edge labels socket to $address")
@@ -220,9 +282,11 @@ class FragmentSegmentAssignmentPias(
 
     }
 
-    private fun pingAddress() = "$piasAddress-ping"
-    private fun requestCurrentSolutionAddress() = "$piasAddress-current-solution"
-    private fun setEdgeLabelsAddress() = "$piasAddress-set-edge-labels"
+    fun pingAddress() = "$piasAddress-ping"
+    fun requestCurrentSolutionAddress() = "$piasAddress-current-solution"
+    fun setEdgeLabelsAddress() = "$piasAddress-set-edge-labels"
+    fun newSolutionSubscriptionAddress() = "$piasAddress-new-solution"
+    fun requestSolutionUpdateAddress() = "$piasAddress-update-solution"
 
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
@@ -242,6 +306,7 @@ class FragmentSegmentAssignmentPias(
 fun main(argv: Array<String>) {
     val context = ZMQ.context(10)
     val assignment = FragmentSegmentAssignmentPias("ipc:///tmp/pias", IdService.dummy(), context = context)
+    assignment.addNewSolutionListener { solutionId -> println("New solution with id $solutionId available") }
     val times = (0..2).map {
         val sw = StopWatch.createAndStart()
         assignment.pingServer(recvTimeout = 50)!!
@@ -253,8 +318,13 @@ fun main(argv: Array<String>) {
     val std = sqrt(times.map { it - mean }.map { it * it }.sum() / times.size)
     println("Ping statistics ${mean}s ± ${std}s")
     println("Did get a new solution! ${assignment.updateSolution(recvTimeout = 50)}")
-    val edges = arrayOf(LabeledEdge(1, 2, 0), LabeledEdge(2, 3, 1))
+    assignment.requestUpdateSolution(recvTimeout = 100)
+//    val edges = arrayOf(LabeledEdge(1, 2, 0), LabeledEdge(2, 3, 1))
+    // (67, 170): 0, (67, 4259)
+    val edges = arrayOf(LabeledEdge(67, 170, 0), LabeledEdge(67, 4259, 1))
     assignment.setEdgeLabels(edges.toList())
+    assignment.requestUpdateSolution(recvTimeout = 1000)
+    Thread.sleep(100)
 
 
 }
