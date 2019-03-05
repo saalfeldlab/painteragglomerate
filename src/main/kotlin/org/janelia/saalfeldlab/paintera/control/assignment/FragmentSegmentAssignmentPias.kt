@@ -306,7 +306,8 @@ class FragmentSegmentAssignmentPias(
 fun main(argv: Array<String>) {
     val context = ZMQ.context(10)
     val assignment = FragmentSegmentAssignmentPias("ipc:///tmp/pias", IdService.dummy(), context = context)
-    assignment.addNewSolutionListener { solutionId -> println("New solution with id $solutionId available") }
+    assignment.addNewSolutionListener { println("New solution with id $it available") }
+    assignment.addNewSolutionListener { println("updated solution within 0.5s? ${assignment.updateSolution(recvTimeout = 500)}") }
     val times = (0..2).map {
         val sw = StopWatch.createAndStart()
         assignment.pingServer(recvTimeout = 50)!!
@@ -324,7 +325,7 @@ fun main(argv: Array<String>) {
     val edges = arrayOf(LabeledEdge(67, 170, 0), LabeledEdge(67, 4259, 1))
     assignment.setEdgeLabels(edges.toList())
     assignment.requestUpdateSolution(recvTimeout = 1000)
-    Thread.sleep(100)
+    Thread.sleep(5000)
 
 
 }
