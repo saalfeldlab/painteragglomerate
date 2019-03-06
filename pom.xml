@@ -11,12 +11,12 @@
 	</parent>
 
 	<groupId>org.janelia.saalfeldlab</groupId>
-	<artifactId>painteragglomerate</artifactId>
+	<artifactId>piac</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 
-	<name>PainterAgglomerate</name>
-	<description>Train agglomeration models with Paintera</description>
-	<url>https://github.com/saalfeldlab/paintera</url>
+	<name>PIAC</name>
+	<description>Paintera Interactive Agglomeration Client</description>
+	<url>https://github.com/saalfeldlab/piac</url>
 	<inceptionYear>2018</inceptionYear>
 	<organization>
 		<name>HHMI Janeli</name>
@@ -29,7 +29,7 @@
 	</licenses>
 	<properties>
 		<scijava.jvm.version>1.8</scijava.jvm.version>
-		<main-class>org.janelia.saalfeldlab.paintera.PainterAgglomerate</main-class>
+		<main-class>org.janelia.saalfeldlab.paintera.PainterAgglomerate2</main-class>
 		<license.licenseName>GNU General Public License v2.0</license.licenseName>
 		<license.copyrightOwners>Philipp Hanslovsky, Stephan Saalfeld</license.copyrightOwners>
 		<kotlin.compiler.jvmTarget>1.8</kotlin.compiler.jvmTarget>
@@ -48,7 +48,7 @@
 
 	<issueManagement>
 		<system>GitHub</system>
-		<url>https://github.com/saalfeldlab/painteragglomerate/issues</url>
+		<url>https://github.com/saalfeldlab/piac/issues</url>
 	</issueManagement>
 
     <ciManagement>
