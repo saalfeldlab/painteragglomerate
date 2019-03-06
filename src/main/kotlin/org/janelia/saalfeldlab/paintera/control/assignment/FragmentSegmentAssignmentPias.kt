@@ -105,14 +105,17 @@ class FragmentSegmentAssignmentPias(
         val context: ZMQ.Context,
         lastFragmentLabel: TLongIntHashMap = TLongIntHashMap(),
         examples: TLongObjectHashMap<TLongIntHashMap> = TLongObjectHashMap()
-        ): ObservableWithListenersList(), FragmentSegmentAssignmentState {
+        ): ObservableWithListenersList(), FragmentSegmentAssignmentState, Closeable {
 
     private val examples = TLongObjectHashMap<TLongIntHashMap>()
     private val lastFragmentLabel = TLongIntHashMap()
-    private val positiveEamples = TLongLongHashMap()
+    private val positiveExamples = TLongLongHashMap()
     private val negativeExamples = TLongLongHashMap()
     private val newSolutionListeners = mutableListOf<(Int) -> Any>()
     private val solutionSubscriber = SolutionUpdateSubscriber(context, newSolutionSubscriptionAddress(), this::notifyNewSolution, recvTimeout = 50)
+
+    var updateOnNewSolution = false
+    var requestSolutionUpdateOnCommit = false
 
     private var lookup = Lookup()
 
@@ -144,7 +147,11 @@ class FragmentSegmentAssignmentPias(
     init {
         this.lastFragmentLabel.putAll(lastFragmentLabel)
         this.examples.putAll(examples)
-        examples.forEachEntry { e1, value -> value.forEachEntry { e2, v -> (if (v==1) positiveEamples else negativeExamples).put(e1, e2);true }; true }
+        examples.forEachEntry { e1, value -> value.forEachEntry { e2, v -> (if (v==1) positiveExamples else negativeExamples).put(e1, e2);true }; true }
+    }
+
+    override fun close() {
+        solutionSubscriber.close()
     }
 
     override fun getFragments(segmentId: Long): TLongHashSet {
@@ -259,27 +266,10 @@ class FragmentSegmentAssignmentPias(
         }
     }
 
-    fun setEdgeLabels(labels: TLongObjectMap<TLongIntMap>, recvTimeout: Int = -1, sendTimeout: Int = -1) {
-
-        val socket = createSocket(context, ZMQ.REQ, recvTimeout = recvTimeout, sendTimeout = sendTimeout)
-        val address = setEdgeLabelsAddress()
-        LOG.info("Connecting set edge labels socket to $address")
-        socket.connect(address)
-        socket.send(codes.setEdge.requestCodes._SET_EDGE_REQ_EDGE_LIST.toBytes(), ZMQ.SNDMORE)
-        // 20 = 8 + 8 + 4 bytes; plus one int for method
-        val bytes = ByteArray(20 * labels.size())
-        ByteBuffer.wrap(bytes).let { labels.forEachEntry { a, b -> b.forEachEntry { c, d -> it.putLong(a); it.putLong(c); it.putInt(d);true }; true } }
-        socket.send(bytes, 0)
-        val responseCode = socket.recv()?.let { ByteBuffer.wrap(it).int } ?: throw Exception("Response code was null!")
-
-        when(responseCode) {
-            codes.setEdge.responseCodes._SET_EDGE_REP_DO_NOT_UNDERSTAND -> throw Exception("Server did not understand method ${socket.recv()?.let { ByteBuffer.wrap(it).int }}")
-            codes.setEdge.responseCodes._SET_EDGE_REP_EXCEPTION -> throw Exception("Server threw exception when trying to add labeled edges: ${socket.recvStr(Charset.defaultCharset())}")
-            codes.setEdge.responseCodes._SET_EDGE_REP_SUCCESS -> {}// TODO update edges in here
-            else -> throw Exception("Do not understand response code $responseCode")
-        }
-
-
+    fun setEdgeLabels(labelMap: TLongObjectMap<TLongIntMap>, recvTimeout: Int = -1, sendTimeout: Int = -1) {
+        val labeledEdges = mutableListOf<LabeledEdge>()
+        labelMap.forEachEntry { e1, labels -> labels.forEachEntry { e2, label -> labeledEdges.add(LabeledEdge(e1, e2, label)); true }; true }
+        setEdgeLabels(labeledEdges, recvTimeout = recvTimeout, sendTimeout = sendTimeout)
     }
 
     fun pingAddress() = "$piasAddress-ping"
@@ -297,6 +287,12 @@ class FragmentSegmentAssignmentPias(
             socket.sendTimeOut = sendTimeout
             return socket
         }
+
+        fun pingAddress(piasAddress: String) = "$piasAddress-ping"
+        fun requestCurrentSolutionAddress(piasAddress: String) = "$piasAddress-current-solution"
+        fun setEdgeLabelsAddress(piasAddress: String) = "$piasAddress-set-edge-labels"
+        fun newSolutionSubscriptionAddress(piasAddress: String) = "$piasAddress-new-solution"
+        fun requestSolutionUpdateAddress(piasAddress: String) = "$piasAddress-update-solution"
     }
 
 
