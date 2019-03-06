@@ -13,10 +13,15 @@ fun serverSocket(context: ZMQ.Context, address: String, receiveTimeout: Int = -1
 
 fun clientSocket(context: ZMQ.Context, address: String, receiveTimeout: Int = -1, sendTimeout: Int = -1): ZMQ.Socket {
     val socket = context.socket(ZMQ.REQ)
-    socket.receiveTimeOut = receiveTimeout
-    socket.sendTimeOut = sendTimeout
-    socket.connect(address)
-    return socket
+    try {
+        socket.receiveTimeOut = receiveTimeout
+        socket.sendTimeOut = sendTimeout
+        socket.connect(address)
+        return socket
+    } catch (e: RuntimeException) {
+        socket.close()
+        return socket;
+    }
 }
 
 
