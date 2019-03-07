@@ -29,16 +29,19 @@ import org.janelia.saalfeldlab.paintera.data.n5.N5FSMeta
 import org.janelia.saalfeldlab.paintera.exception.PainteraException
 import org.janelia.saalfeldlab.paintera.ui.PainteraAlerts
 import org.janelia.saalfeldlab.paintera.ui.opendialog.DatasetInfo
+import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenuEntry
 import org.janelia.saalfeldlab.paintera.ui.opendialog.meta.MetaPanel
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.clientSocket
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.toInt
 import org.janelia.saalfeldlab.util.n5.N5Helpers
+import org.scijava.plugin.Plugin
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import org.zeromq.ZMQException
 import java.lang.invoke.MethodHandles
 import java.nio.charset.Charset
 import java.util.concurrent.Callable
+import java.util.function.BiConsumer
 import java.util.function.Supplier
 
 class SpecificPiasOpener {
@@ -262,6 +265,26 @@ class SpecificPiasOpener {
 
     }
 
+    @Plugin(type = OpenDialogMenuEntry::class, menuPath = "_Pias", priority = java.lang.Double.MAX_VALUE)
+    class MenuEntry : OpenDialogMenuEntry {
+
+        override fun onAction(): BiConsumer<PainteraBaseView, String> {
+            return BiConsumer{ pbv, projectDirectory ->
+                try {
+                    LOG.info("Creating and showing dialog")
+                    SpecificPiasOpener().createDialog().showAndWait()
+                } catch (e1: Exception) {
+                    LOG.debug("Unable to open pias dataset", e1)
+                    Exceptions.exceptionAlert(Paintera.NAME, "Unable to open pias data set", e1).show()
+                }
+            }
+        }
+
+        companion object {
+            private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
+        }
+    }
+
 }
 
 class PiasEndpointException(
@@ -290,7 +313,6 @@ class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
         (dialogPane.lookupButton(ButtonType.CANCEL) as Button).text = "_Cancel"
         onShowing = EventHandler { Platform.runLater { urlPrompt.requestFocus() } }
     }
-
 }
 
 fun main(args: Array<String>) {
