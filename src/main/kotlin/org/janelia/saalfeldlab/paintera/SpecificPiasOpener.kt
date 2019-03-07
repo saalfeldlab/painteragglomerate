@@ -3,7 +3,7 @@ package org.janelia.saalfeldlab.paintera
 import com.sun.javafx.application.PlatformImpl
 import javafx.application.Platform
 import javafx.beans.binding.Bindings
-import javafx.beans.property.ObjectProperty
+import javafx.beans.property.DoubleProperty
 import javafx.beans.property.ReadOnlyBooleanProperty
 import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleIntegerProperty
@@ -25,7 +25,6 @@ import javafx.scene.layout.VBox
 import org.janelia.saalfeldlab.fx.ui.Exceptions
 import org.janelia.saalfeldlab.fx.util.InvokeOnJavaFXApplicationThread
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentPias
-import org.janelia.saalfeldlab.paintera.data.axisorder.AxisOrder
 import org.janelia.saalfeldlab.paintera.data.n5.N5FSMeta
 import org.janelia.saalfeldlab.paintera.exception.PainteraException
 import org.janelia.saalfeldlab.paintera.ui.PainteraAlerts
@@ -54,29 +53,47 @@ class SpecificPiasOpener {
 
     private val dataset = Bindings.createObjectBinding(Callable { n5meta.get()?.dataset()}, n5meta)
 
-    private val isN5Valid = n5.isNotNull()
+    private val isN5Valid = n5.isNotNull
 
     private val isDatasetValid = dataset.isNotNull
 
+    private val isPainteraDataset = Bindings.createObjectBinding(Callable { isN5Valid.get() && isDatasetValid.get() && N5Helpers.isPainteraDataset(n5.get(), dataset.get()) }, n5 ,dataset, isDatasetValid)
+
     private val datasetAttributes = Bindings.createObjectBinding(Callable {
-        dataset.get()?.let {
-            n5.get()?.getDatasetAttributes("$it/data/s0")
+        dataset.get()?.let {ds ->
+            n5.get()
+                    ?.takeIf { isPainteraDataset.get() }
+                    ?.let {
+                        try {
+                            it.getDatasetAttributes("$ds/data/s0")
+                        } catch (e: Exception) {
+                            LOG.debug("Unable to get attributes from {} in {}", dataset.get(), it)
+                            Platform.runLater { Exceptions.exceptionAlert("Unable to update dataset attributes for paintera dataset `$ds' in container `$it'", e).show() }
+                            null
+                        }
+                    }
+                    .let{ LOG.debug("Updating dataset attributes to {}", it); it }
         }
-    }, n5, dataset)
+    }, n5, dataset, isPainteraDataset)
 
-    private val resolution = Bindings.createObjectBinding(Callable { dataset.get()?.let { d -> n5.get()?.let { N5Helpers.getResolution(it, d) } } }, n5, dataset)
+    private val resolution = Bindings.createObjectBinding(Callable { dataset.get()?.let { d -> n5.get()?.takeIf { isPainteraDataset.get() }?.let { N5Helpers.getResolution(it, d) } } }, n5, dataset, isPainteraDataset)
 
-    private val offset = Bindings.createObjectBinding(Callable { dataset.get()?.let { d -> n5.get()?.let { N5Helpers.getOffset(it, d) } } }, n5, dataset)
+    private val offset = Bindings.createObjectBinding(Callable { dataset.get()?.let { d -> n5.get().takeIf { isPainteraDataset.get() }?.let { N5Helpers.getOffset(it, d) } } }, n5, dataset, isPainteraDataset)
 
-    private val dimensions = Bindings.createObjectBinding<LongArray>(Callable { datasetAttributes.get()?.dimensions }, datasetAttributes)
-
-    private val axisOrder: ObjectProperty<AxisOrder> = SimpleObjectProperty()
+    private val dimensions = SimpleObjectProperty<LongArray?>(longArrayOf(-1, -1, -1))
 
     private val datasetInfo = DatasetInfo()
+
+    private val isValid = isN5Valid.and(isDatasetValid).and(datasetAttributes.isNotNull)
+
+    private val metaPanel = MetaPanel()
 
     init {
         resolution.addListener { _, _, newv -> newv?.let{ it.forEachIndexed { dim, res -> datasetInfo.spatialResolutionProperties()[dim].set(res) } } }
         offset.addListener { _, _, newv -> newv?.let{ it.forEachIndexed { dim, off -> datasetInfo.spatialOffsetProperties()[dim].set(off) } } }
+        datasetAttributes.addListener { _, _, newv ->
+            LOG.debug("New attributes: {}", newv); dimensions.value = newv?.dimensions.let { LOG.info("Updating dimensions {}", it); it } }
+        dimensions.addListener { _, _, newv -> LOG.info("Updated dimensions to {}", newv)}
     }
 
     fun createDialog(): Dialog<ButtonType> {
@@ -86,7 +103,7 @@ class SpecificPiasOpener {
         dialog.dialogPane.buttonTypes.setAll(ButtonType.OK, ButtonType.CANCEL)
         (dialog.dialogPane.lookupButton(ButtonType.OK) as Button).let {
             it.text = "_Ok"
-            it.disableProperty().bind(pingSuccessful.not())
+            it.disableProperty().bind(isValid.not())
         }
         (dialog.dialogPane.lookupButton(ButtonType.CANCEL) as Button).let { it.text = "_Cancel" }
 
@@ -99,17 +116,17 @@ class SpecificPiasOpener {
         containerTextField.maxWidth = java.lang.Double.POSITIVE_INFINITY
         containerTextField.promptText = "PIAS address"
 
-        val enterUrl = MenuItem("_Enter URL")
-        enterUrl.setOnAction { EnterUrlDialog(containerTextField.text).let {
-                it.showAndWait().let { r -> if (r.filter { ButtonType.OK == it }.isPresent()) { containerTextField.text = null; containerTextField.text = it.urlPrompt.text } } } }
+        val menuPrompt = MenuItem("_Enter URL")
+        menuPrompt.setOnAction { UrlPromptDialog(containerTextField.text).let {
+                it.showAndWait().let { r -> if (r.filter { ButtonType.OK == it }.isPresent) { containerTextField.text = null; containerTextField.text = it.urlPrompt.text } } } }
         // _C is already reserved for _Cancel
         // for some reason, C_onnect does not work
-        val connectButton = MenuButton("Co_nnect", null, enterUrl)
+        val connectButton = MenuButton("Co_nnect", null, menuPrompt)
 
-        val metaPanel = MetaPanel()
         metaPanel.listenOnDimensions(dimensions)
         datasetInfo.spatialOffsetProperties().let { metaPanel.listenOnOffset(it[0], it[1], it[2]) }
         datasetInfo.spatialResolutionProperties().let { metaPanel.listenOnResolution(it[0], it[1], it[2]) }
+        metaPanel.revertButton.onAction = EventHandler { datasetInfo.spatialResolutionProperties().revertValues(); datasetInfo.spatialOffsetProperties().revertValues() }
 
         HBox.setHgrow(containerTextField, Priority.ALWAYS)
         val content = VBox(HBox(containerTextField, connectButton), metaPanel.pane)
@@ -180,9 +197,20 @@ class SpecificPiasOpener {
 
         private val N5_META_ENDPOINT = "/api/n5/all"
 
-        private fun n5MetaFromPiasNoThrowShowExceptions(address: String, recvTimeout: Int = -1, sendTimeout: Int = -1): N5FSMeta? {
+        private fun Array<out DoubleProperty>.revertValues() {
+            (0 until size / 2).forEach {
+                val tmp = this[it].get()
+                this[it].set(this[size - 1 - it].get())
+                this[size - 1 - it].set(tmp)
+            }
+        }
+
+        fun n5MetaFromPiasNoThrowShowExceptions(address: String, recvTimeout: Int = -1, sendTimeout: Int = -1): N5FSMeta? {
             return try {
-                return n5MetaFromPias(address, recvTimeout, sendTimeout)
+                LOG.info("Trying to get n5 meta from pias at address {}", address)
+                val meta = n5MetaFromPias(address, recvTimeout, sendTimeout)
+                LOG.info("Got n5 meta {} from pias at address {}", meta, address)
+                meta
             } catch (e: Exception) {
                 Exceptions.exceptionAlert("Unable to retrieve data set information from PIAS at $address within ${recvTimeout}ms", e)
                 null
@@ -192,14 +220,14 @@ class SpecificPiasOpener {
         @Throws(PiasEndpointException::class)
         private fun n5MetaFromPias(address: String, recvTimeout: Int = - 1, sendTimeout: Int = -1): N5FSMeta?  {
             val context = ZMQ.context(IO_THREADS)
-            try {
+            return try {
                 val socket = try {
                     clientSocket(context, address, receiveTimeout = recvTimeout, sendTimeout = sendTimeout)
                 } catch (e: Exception) {
                     LOG.error("Unable to get n5 meta information from PIAS server at {}: {}", address, e.message)
                     null
                 }
-                return socket?.let {
+                socket?.let {
                     it.send(N5_META_ENDPOINT)
                     // returnCode success: 0
                     val returnCode = it.recv().toInt()
@@ -219,11 +247,10 @@ class SpecificPiasOpener {
                         } else
                             it.recv()
                     }
+                    it.close()
                     if (!success)
                         throw PiasEndpointException(address, returnCode, *messages.toTypedArray(), "Request to $address/$N5_META_ENDPOINT returned non-successfully")
                     N5FSMeta(n5metaList[0], n5metaList[1])
-//                    LOG.info("Got return code {} from n5 meta request at address {}", returnCode, address)
-//                    if (returnCode != 0) throw RuntimeException("Got ")
                 }
 
             } finally {
@@ -243,7 +270,7 @@ class PiasEndpointException(
         vararg val messages: Any,
         val exceptionMessage: String? = null): PainteraException(exceptionMessage)
 
-class EnterUrlDialog(val initialString: String?): Dialog<ButtonType>() {
+class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
 
     val urlPrompt = TextField(initialString)
 
