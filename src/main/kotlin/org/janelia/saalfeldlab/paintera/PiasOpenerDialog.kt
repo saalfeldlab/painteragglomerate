@@ -24,6 +24,9 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import org.janelia.saalfeldlab.fx.ui.Exceptions
 import org.janelia.saalfeldlab.fx.util.InvokeOnJavaFXApplicationThread
+import org.janelia.saalfeldlab.n5.DataType
+import org.janelia.saalfeldlab.n5.DatasetAttributes
+import org.janelia.saalfeldlab.n5.N5Reader
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentPias
 import org.janelia.saalfeldlab.paintera.data.n5.N5FSMeta
 import org.janelia.saalfeldlab.paintera.exception.PainteraException
@@ -77,7 +80,7 @@ class PiasOpenerDialog {
                     }
                     .let{ LOG.debug("Updating dataset attributes to {}", it); it }
         }
-    }, n5, dataset, isPainteraDataset)
+    }, dataset, isPainteraDataset)
 
     private val resolution = Bindings.createObjectBinding(Callable { dataset.get()?.let { d -> n5.get()?.takeIf { isPainteraDataset.get() }?.let { N5Helpers.getResolution(it, d) } } }, n5, dataset, isPainteraDataset)
 
@@ -87,7 +90,20 @@ class PiasOpenerDialog {
 
     private val datasetInfo = DatasetInfo()
 
-    private val isValid = isN5Valid.and(isDatasetValid).and(datasetAttributes.isNotNull)
+    private val dataType = Bindings.createObjectBinding(Callable {
+        dataset.get()?.let{ ds ->
+            n5.get()
+                    ?.takeIf { isPainteraDataset.get() }
+                    ?.let { datasetAttributes.get()?.let { attrs -> try {
+                        getDataType(it, ds, attrs)
+                    } catch (e: Exception) {
+                        Platform.runLater { Exceptions.exceptionAlert("Unable to update dataset type for paintera dataset `$ds' in container `$it'", e).show() }
+                        null
+                    } } }
+        }
+    }, datasetAttributes)
+
+    private val isValid = isN5Valid.and(isDatasetValid).and(datasetAttributes.isNotNull).and(dataType.isNotNull)
 
     private val metaPanel = MetaPanel()
 
@@ -200,6 +216,20 @@ class PiasOpenerDialog {
 
         private val N5_META_ENDPOINT = "/api/n5/all"
 
+        @Throws(InvalidDataType::class)
+        private fun getDataType(reader: N5Reader, dataset: String, attributes: DatasetAttributes): DataTypeOrLabelMultisetType {
+            return attributes.dataType.let {
+                try {
+                    DataTypeOrLabelMultisetType(it, false)
+                } catch (e: InvalidDataType) {
+                    if (it == DataType.UINT8 && reader.getAttribute("$dataset/data", N5Helpers.IS_LABEL_MULTISET_KEY, Boolean::class.java) == true) {
+                        DataTypeOrLabelMultisetType(it, true)
+                    } else
+                        throw e
+                }
+            }
+        }
+
         private fun Array<out DoubleProperty>.revertValues() {
             (0 until size / 2).forEach {
                 val tmp = this[it].get()
@@ -293,6 +323,8 @@ class PiasEndpointException(
         vararg val messages: Any,
         val exceptionMessage: String? = null): PainteraException(exceptionMessage)
 
+class InvalidDataType(val actual: DataType, vararg val choices: DataType, message: String = "Found data type $actual but require one of ${choices}") : PainteraException(message)
+
 class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
 
     val urlPrompt = TextField(initialString)
@@ -313,6 +345,23 @@ class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
         (dialogPane.lookupButton(ButtonType.CANCEL) as Button).text = "_Cancel"
         onShowing = EventHandler { Platform.runLater { urlPrompt.requestFocus() } }
     }
+}
+
+
+data class DataTypeOrLabelMultisetType @Throws(InvalidDataType::class) constructor(val dataType: DataType, val isLabelMultiset: Boolean) {
+
+    init {
+        dataType.takeIf { validNonMultisetTypesAsSet.contains(dataType) || isLabelMultiset } ?: throw InvalidDataType(
+                dataType,
+                *validNonMultisetTypes,
+                message = "Found data type $dataType but require one of ${validNonMultisetTypesAsSet} or tag `\"isLabelMultiset\":true' in attributes.json")
+    }
+
+    companion object {
+        val validNonMultisetTypes = arrayOf(DataType.UINT32, DataType.UINT64, DataType.INT64)
+        val validNonMultisetTypesAsSet = validNonMultisetTypes.toSet()
+    }
+
 }
 
 fun main(args: Array<String>) {
