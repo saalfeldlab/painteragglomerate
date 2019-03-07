@@ -6,11 +6,15 @@ import gnu.trove.map.hash.TLongIntHashMap
 import gnu.trove.map.hash.TLongLongHashMap
 import gnu.trove.map.hash.TLongObjectHashMap
 import gnu.trove.set.hash.TLongHashSet
+import net.imglib2.type.label.Label
 import net.imglib2.util.StopWatch
 import org.janelia.saalfeldlab.fx.ObservableWithListenersList
 import org.janelia.saalfeldlab.paintera.control.assignment.action.AssignmentAction
+import org.janelia.saalfeldlab.paintera.control.assignment.action.Detach
+import org.janelia.saalfeldlab.paintera.control.assignment.action.Merge
 import org.janelia.saalfeldlab.paintera.id.IdService
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.*
+import org.janelia.saalfeldlab.util.computeIfAbsent
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import java.io.Closeable
@@ -18,6 +22,9 @@ import java.lang.invoke.MethodHandles
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
 import java.util.*
+import java.util.function.LongSupplier
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.sqrt
 
 private object codes {
@@ -114,7 +121,7 @@ class FragmentSegmentAssignmentPias(
     private val newSolutionListeners = mutableListOf<(Int) -> Any>()
     private val solutionSubscriber = SolutionUpdateSubscriber(context, newSolutionSubscriptionAddress(), this::notifyNewSolution, recvTimeout = 50)
 
-    var updateOnNewSolution = false
+    var updateOnNewSolution = true
     var requestSolutionUpdateOnCommit = false
 
     private var lookup = Lookup()
@@ -125,22 +132,24 @@ class FragmentSegmentAssignmentPias(
         val segmentFragment = TLongObjectHashMap<TLongHashSet>()
 
         init {
-            val counts = TLongLongHashMap()
-            assignments.forEachValue{ counts.put(it, counts[it] + 1); true }
-            val rootMapping = TLongLongHashMap()
-            assignments.forEachEntry { k, v ->
-                if (counts[v] > 1) {
-                    if (!rootMapping.containsKey(v)) {
-                        val root = idService.next()
-                        rootMapping.put(v, root)
-                        segmentFragment.put(root, TLongHashSet())
-                    }
-                    val root = rootMapping[v]
-                    fragmentSegment.put(k, root)
-                    segmentFragment[root].add(k)
-                }
-                true
-            }
+//            val counts = TLongLongHashMap()
+//            assignments.forEachValue{ counts.put(it, counts[it] + 1); true }
+//            val rootMapping = TLongLongHashMap()
+//            assignments.forEachEntry { k, v ->
+//                if (counts[v] > 1) {
+//                    if (!rootMapping.containsKey(v)) {
+//                        val root = idService.next()
+//                        rootMapping.put(v, root)
+//                        segmentFragment.put(root, TLongHashSet())
+//                    }
+//                    val root = rootMapping[v]
+//                    fragmentSegment.put(k, root)
+//                    segmentFragment[root].add(k)
+//                }
+//                true
+//            }
+            fragmentSegment.putAll(assignments)
+            fragmentSegment.forEachEntry { k, v -> segmentFragment.computeIfAbsent(v) {TLongHashSet()}.add(k) }
         }
     }
 
@@ -148,6 +157,7 @@ class FragmentSegmentAssignmentPias(
         this.lastFragmentLabel.putAll(lastFragmentLabel)
         this.examples.putAll(examples)
         examples.forEachEntry { e1, value -> value.forEachEntry { e2, v -> (if (v==1) positiveExamples else negativeExamples).put(e1, e2);true }; true }
+        newSolutionListeners.add { if (updateOnNewSolution) updateSolution(recvTimeout = 5000, sendTimeout = 5000) }
     }
 
     override fun close() {
@@ -167,14 +177,34 @@ class FragmentSegmentAssignmentPias(
     }
 
     override fun apply(action: AssignmentAction?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        LOG.debug("Applying action {}", action)
+        action.let {
+            if (it is Merge)
+                listOf(LabeledEdge(it.fromFragmentId, it.intoFragmentId, 1)) else if (it is Detach)
+                listOf(LabeledEdge(it.fragmentId, it.fragmentFrom, 0)) else
+                null
+        }?.let { setEdgeLabels(it, recvTimeout = 1000, sendTimeout = 1000); requestUpdateSolution(recvTimeout = 1000, sendTimeout = 1000) }
     }
 
     override fun apply(actions: MutableCollection<out AssignmentAction>?) {
-        TODO("not implemented") //To change body of created functions use File | Settings | File Templates.
+        LOG.debug("Applying actions {}", actions)
+        actions?.forEach { apply(it) }
+    }
+
+    override fun getMergeAction(from: Long, into: Long, newSegmentId: LongSupplier?): Optional<Merge> {
+        if (from == into)
+            return Optional.empty()
+        return Optional.of(Merge(min(from, into), max(from, into), Label.INVALID))
+    }
+
+    override fun getDetachAction(fragmentId: Long, from: Long): Optional<Detach> {
+        if (from == fragmentId)
+            return Optional.empty()
+        return Optional.of(Detach(min(from, fragmentId), max(from, fragmentId)))
     }
 
     private fun updateLookup(assignments: TLongLongHashMap) {
+        LOG.info("New lookup table arrived! {}", assignments)
         lookup = Lookup(assignments)
         stateChanged()
     }
@@ -191,15 +221,19 @@ class FragmentSegmentAssignmentPias(
     }
 
     private fun bytesToLookup(bytes: ByteArray) {
-        require(bytes.size % (2 * java.lang.Long.BYTES) == 0, {"Received byte array that is not integer multiple of 2 longs: ${bytes.size} -- ${Arrays.toString(bytes)}"})
+        LOG.info("Received new lookup as bytes: {}", bytes)
+        require(bytes.size % (2 * java.lang.Long.BYTES) == 0) {"Received byte array that is not integer multiple of 2 longs: ${bytes.size} -- ${Arrays.toString(bytes)}"}
         updateLookup(ByteBuffer.wrap(bytes).let {
-            val map = TLongLongHashMap()
-            while (it.hasRemaining()) {
-                val k = it.long;
-                val v = it.long;
-                map.put(k, v)
-            }
-            map
+            val keys = (0 until bytes.size / 2 / java.lang.Long.BYTES).map { _ -> it.long }.toLongArray()
+            val vals = (0 until bytes.size / 2 / java.lang.Long.BYTES).map { _ -> it.long }.toLongArray()
+            TLongLongHashMap(keys, vals)
+//            val map = TLongLongHashMap()
+//            while (it.hasRemaining()) {
+//                val k = it.long;
+//                val v = it.long;
+//                map.put(k, v)
+//            }
+//            map
         })
 
     }
@@ -224,7 +258,7 @@ class FragmentSegmentAssignmentPias(
         socket.send("")
         return socket.recv()?.let {
             val responseCode = ByteBuffer.wrap(it).int
-            LOG.info(("Received response code $responseCode"))
+            LOG.debug(("Received response code $responseCode"))
             when(responseCode) {
                 0 -> {bytesToLookup(socket.recv());true}
                 1 -> false
@@ -238,7 +272,7 @@ class FragmentSegmentAssignmentPias(
         socket.send("")
         val responseCode = socket.recv()?.toInt() ?: Exception("Did not receive response within $recvTimeout")
         when (responseCode) {
-            codes.requestSolutionUpdate.responseCodes._SOLUTION_UPDATE_REQUEST_RECEIVED -> {socket.recv()!!.toInt().let{LOG.info("Received solution request and will generate new solution with id $it"); it}}
+            codes.requestSolutionUpdate.responseCodes._SOLUTION_UPDATE_REQUEST_RECEIVED -> {socket.recv()!!.toInt().let{LOG.debug("Server received solution request and will generate new solution with id $it"); it}}
             else -> throw Exception("Do not understand response code $responseCode")
         }
         return null
@@ -246,23 +280,26 @@ class FragmentSegmentAssignmentPias(
 
     fun setEdgeLabels(labels: Collection<LabeledEdge>, recvTimeout: Int = -1, sendTimeout: Int = -1) {
 
-        LOG.info("Setting edge labels {}", labels)
-        val socket = createSocket(context, ZMQ.REQ, recvTimeout = recvTimeout, sendTimeout = sendTimeout)
-        val address = setEdgeLabelsAddress()
-        LOG.info("Connecting set edge labels socket to $address")
-        socket.connect(address)
-        socket.send(codes.setEdge.requestCodes._SET_EDGE_REQ_EDGE_LIST.toBytes(), ZMQ.SNDMORE)
-        // 20 = 8 + 8 + 4 bytes; plus one int for method
-        val bytes = ByteArray(20 * labels.size)
-        ByteBuffer.wrap(bytes).let { labels.forEach { le -> le.serializeToBuffer(it) } }
-        socket.send(bytes, 0)
-        val responseCode = socket.recv()?.let { ByteBuffer.wrap(it).int } ?: throw Exception("Response code was null!")
+        LOG.debug("Setting edge labels {}", labels)
+        createSocket(context, ZMQ.REQ, recvTimeout = recvTimeout, sendTimeout = sendTimeout).use { socket ->
+            val address = setEdgeLabelsAddress()
+            LOG.debug("Connecting set edge labels socket to $address")
+            socket.connect(address)
+            socket.send(codes.setEdge.requestCodes._SET_EDGE_REQ_EDGE_LIST.toBytes(), ZMQ.SNDMORE)
+            // 20 = 8 + 8 + 4 bytes; plus one int for method
+            val bytes = ByteArray(20 * labels.size)
+            ByteBuffer.wrap(bytes).let { labels.forEach { le -> le.serializeToBuffer(it) } }
+            socket.send(bytes, 0)
+            val responseCode = socket.recv()?.let { ByteBuffer.wrap(it).int }
+                    ?: throw Exception("Response code was null!")
 
-        when(responseCode) {
-            codes.setEdge.responseCodes._SET_EDGE_REP_DO_NOT_UNDERSTAND -> throw Exception("Server did not understand method ${socket.recv()?.let { ByteBuffer.wrap(it).int }}")
-            codes.setEdge.responseCodes._SET_EDGE_REP_EXCEPTION -> throw Exception("Server threw exception when trying to add labeled edges: ${socket.recvStr(Charset.defaultCharset())}")
-            codes.setEdge.responseCodes._SET_EDGE_REP_SUCCESS -> {}// TODO update edges in here
-            else -> throw Exception("Do not understand response code $responseCode")
+            when (responseCode) {
+                codes.setEdge.responseCodes._SET_EDGE_REP_DO_NOT_UNDERSTAND -> throw Exception("Server did not understand method ${socket.recv()?.let { ByteBuffer.wrap(it).int }}")
+                codes.setEdge.responseCodes._SET_EDGE_REP_EXCEPTION -> throw Exception("Server threw exception when trying to add labeled edges: ${socket.recvStr(Charset.defaultCharset())}")
+                codes.setEdge.responseCodes._SET_EDGE_REP_SUCCESS -> {
+                }// TODO update edges in here
+                else -> throw Exception("Do not understand response code $responseCode")
+            }
         }
     }
 
