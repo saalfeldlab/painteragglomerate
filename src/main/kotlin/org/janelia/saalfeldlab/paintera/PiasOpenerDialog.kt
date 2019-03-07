@@ -44,7 +44,7 @@ import java.util.concurrent.Callable
 import java.util.function.BiConsumer
 import java.util.function.Supplier
 
-class SpecificPiasOpener {
+class PiasOpenerDialog {
 
     private val address = SimpleStringProperty(DEFAULT_ADDRESS)
 
@@ -272,7 +272,7 @@ class SpecificPiasOpener {
             return BiConsumer{ pbv, projectDirectory ->
                 try {
                     LOG.info("Creating and showing dialog")
-                    SpecificPiasOpener().createDialog().showAndWait()
+                    PiasOpenerDialog().createDialog().showAndWait()
                 } catch (e1: Exception) {
                     LOG.debug("Unable to open pias dataset", e1)
                     Exceptions.exceptionAlert(Paintera.NAME, "Unable to open pias data set", e1).show()
@@ -317,7 +317,7 @@ class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
 
 fun main(args: Array<String>) {
     PlatformImpl.startup {}
-    val opener = SpecificPiasOpener()
+    val opener = PiasOpenerDialog()
     Platform.setImplicitExit(true)
     Platform.runLater { opener.createDialog().showAndWait() }
 }
