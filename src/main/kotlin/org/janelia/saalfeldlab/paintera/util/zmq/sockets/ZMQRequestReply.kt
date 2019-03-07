@@ -20,7 +20,7 @@ fun clientSocket(context: ZMQ.Context, address: String, receiveTimeout: Int = -1
         return socket
     } catch (e: RuntimeException) {
         socket.close()
-        return socket;
+        throw e
     }
 }
 
