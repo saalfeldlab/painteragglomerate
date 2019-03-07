@@ -1,5 +1,6 @@
 package org.janelia.saalfeldlab.paintera
 
+import bdv.viewer.Source
 import com.sun.javafx.application.PlatformImpl
 import javafx.application.Platform
 import javafx.beans.binding.Bindings
@@ -9,6 +10,7 @@ import javafx.beans.property.SimpleBooleanProperty
 import javafx.beans.property.SimpleIntegerProperty
 import javafx.beans.property.SimpleObjectProperty
 import javafx.beans.property.SimpleStringProperty
+import javafx.collections.ListChangeListener
 import javafx.event.EventHandler
 import javafx.scene.control.Alert
 import javafx.scene.control.Button
@@ -22,20 +24,44 @@ import javafx.scene.input.KeyEvent
 import javafx.scene.layout.HBox
 import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
+import net.imglib2.Interval
+import net.imglib2.realtransform.AffineTransform3D
+import net.imglib2.type.Type
+import net.imglib2.type.numeric.IntegerType
+import net.imglib2.type.numeric.integer.LongType
+import net.imglib2.type.numeric.integer.UnsignedIntType
+import net.imglib2.type.numeric.integer.UnsignedLongType
+import net.imglib2.type.volatiles.VolatileLongType
+import net.imglib2.type.volatiles.VolatileUnsignedIntType
+import net.imglib2.type.volatiles.VolatileUnsignedLongType
 import org.janelia.saalfeldlab.fx.ui.Exceptions
 import org.janelia.saalfeldlab.fx.util.InvokeOnJavaFXApplicationThread
 import org.janelia.saalfeldlab.n5.DataType
 import org.janelia.saalfeldlab.n5.DatasetAttributes
 import org.janelia.saalfeldlab.n5.N5Reader
+import org.janelia.saalfeldlab.n5.N5Writer
+import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaYCbCr
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentPias
+import org.janelia.saalfeldlab.paintera.control.lock.LockedSegmentsOnlyLocal
+import org.janelia.saalfeldlab.paintera.control.selection.SelectedIds
+import org.janelia.saalfeldlab.paintera.data.DataSource
+import org.janelia.saalfeldlab.paintera.data.mask.Masks
+import org.janelia.saalfeldlab.paintera.data.n5.CommitCanvasN5
 import org.janelia.saalfeldlab.paintera.data.n5.N5FSMeta
 import org.janelia.saalfeldlab.paintera.exception.PainteraException
+import org.janelia.saalfeldlab.paintera.meshes.InterruptibleFunction
+import org.janelia.saalfeldlab.paintera.meshes.MeshManagerWithAssignmentForSegments
+import org.janelia.saalfeldlab.paintera.state.LabelSourceState
+import org.janelia.saalfeldlab.paintera.stream.HighlightingStreamConverter
+import org.janelia.saalfeldlab.paintera.stream.ModalGoldenAngleSaturatedHighlightingARGBStream
 import org.janelia.saalfeldlab.paintera.ui.PainteraAlerts
 import org.janelia.saalfeldlab.paintera.ui.opendialog.DatasetInfo
 import org.janelia.saalfeldlab.paintera.ui.opendialog.menu.OpenDialogMenuEntry
 import org.janelia.saalfeldlab.paintera.ui.opendialog.meta.MetaPanel
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.clientSocket
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.toInt
+import org.janelia.saalfeldlab.util.MakeUnchecked
+import org.janelia.saalfeldlab.util.n5.N5Data
 import org.janelia.saalfeldlab.util.n5.N5Helpers
 import org.scijava.plugin.Plugin
 import org.slf4j.LoggerFactory
@@ -43,8 +69,11 @@ import org.zeromq.ZMQ
 import org.zeromq.ZMQException
 import java.lang.invoke.MethodHandles
 import java.nio.charset.Charset
+import java.nio.file.Files
+import java.nio.file.Paths
 import java.util.concurrent.Callable
 import java.util.function.BiConsumer
+import java.util.function.Consumer
 import java.util.function.Supplier
 
 class PiasOpenerDialog {
@@ -115,7 +144,7 @@ class PiasOpenerDialog {
         dimensions.addListener { _, _, newv -> LOG.info("Updated dimensions to {}", newv)}
     }
 
-    fun createDialog(): Dialog<ButtonType> {
+    private fun createDialog(): Dialog<ButtonType> {
         val dialog = Dialog<ButtonType>()
         dialog.title = Paintera.NAME
         dialog.headerText = "Open pias dataset"
@@ -153,6 +182,22 @@ class PiasOpenerDialog {
         LOG.info("Returning dialog with content {}", content)
 
         return dialog
+    }
+
+    fun showDialogAndAddIfOk(paintera: PainteraBaseView, projectDirectory: () -> String?) {
+        val dialog = createDialog()
+        if (dialog.showAndWait().filter { ButtonType.OK.equals(it) }.isPresent) {
+            paintera.addPiasSource(
+                    dataType.value!!,
+                    n5.value!!,
+                    dataset.value!!,
+                    datasetInfo.spatialResolutionProperties().map { it.value }.toDoubleArray(),
+                    datasetInfo.spatialOffsetProperties().map { it.value }.toDoubleArray(),
+                    "PIAS",
+                    ioThreads = IO_THREADS,
+                    projectDirectory = projectDirectory,
+                    piasAddress = address.value)
+        }
     }
 
     fun pingServerAndWait(address: String): ReadOnlyBooleanProperty {
@@ -289,8 +334,106 @@ class PiasOpenerDialog {
             } finally {
                 context.term()
             }
+        }
+
+        private fun AffineTransform3D.fromResolutionAndOffset(
+                resolution: DoubleArray = DoubleArray(numDimensions()) {1.0},
+                offset: DoubleArray = DoubleArray(numDimensions(), {0.0} )): AffineTransform3D {
+            set(
+                    resolution[0], 0.0, 0.0, offset[0],
+                    0.0, resolution[1], 0.0, offset[1],
+                    0.0, 0.0, resolution[2], offset[2]
+            )
+            return this
+        }
+
+        @Throws(InvalidDataType::class)
+        private fun PainteraBaseView.addPiasSource(
+                dataType: DataTypeOrLabelMultisetType,
+                container: N5Writer,
+                dataset: String,
+                resolution: DoubleArray,
+                offset: DoubleArray,
+                name: String,
+                piasAddress: String,
+                projectDirectory: () -> String?,
+                ioThreads: Int = IO_THREADS
+        ) {
+            val tf = AffineTransform3D().fromResolutionAndOffset(resolution = resolution, offset = offset)
+            val cache = globalCache
+            if (dataType.isLabelMultiset) {
+                addPiasSource(N5Data.openLabelMultisetAsSource(container, dataset, tf, globalCache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
+            } else {
+
+                when (dataType.dataType) {
+                    DataType.UINT32 -> addPiasSource(N5Data.openScalarAsSource<UnsignedIntType, VolatileUnsignedIntType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
+                    DataType.UINT64 -> addPiasSource(N5Data.openScalarAsSource<UnsignedLongType, VolatileUnsignedLongType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
+                    DataType.INT64 -> addPiasSource(N5Data.openScalarAsSource<LongType, VolatileLongType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
+                    else -> throw DataTypeOrLabelMultisetType.exceptionFor(dataType.dataType)
+                }
+            }
+
+        }
+
+        private fun <D: IntegerType<D>, T: Type<T>> PainteraBaseView.addPiasSource(
+                source: DataSource<D, T>,
+                container: N5Writer,
+                dataset: String,
+                piasAddress: String,
+                projectDirectory: () -> String?,
+                ioThreads: Int = IO_THREADS
+        ) {
+            val context = ZMQ.context(ioThreads)
+            val idService = N5Helpers.idService(container, dataset)
+            val selectedIds = SelectedIds()
+            val assignment = FragmentSegmentAssignmentPias(piasAddress = piasAddress, context = context, idService = idService)
+            val lockedSegments = LockedSegmentsOnlyLocal(Consumer{})
+            val stream = ModalGoldenAngleSaturatedHighlightingARGBStream(selectedIds, assignment, lockedSegments)
+            val converter = HighlightingStreamConverter.forType(stream, source.type)
+
+            val nextCanvas = Supplier { ( projectDirectory()?.let { Paths.get(it, "canvases").let { it.toFile().mkdirs(); Files.createTempDirectory(it, "canvas-") } } ?: Files.createTempDirectory("canvas-")).toAbsolutePath().toString()}
+            // TODO use CommitCanvas that updates edge features!!!
+            val maskedSource = Masks.mask(source, null, nextCanvas, CommitCanvasN5(container, dataset), this.propagationQueue)
 
 
+            val lookup = N5Helpers.getLabelBlockLookup(container, dataset)
+
+            val loaderForLevelFactory = { level: Int ->
+                InterruptibleFunction.fromFunction(
+                        MakeUnchecked.function<Long, Array<Interval>>(
+                                { id -> lookup.read(level, id!!) },
+                                { id -> LOG.debug("Falling back to empty array"); arrayOf() }))
+            }
+
+            val blockLoaders = (0 until maskedSource.numMipmapLevels).map { loaderForLevelFactory(it) }.toTypedArray()
+
+            val meshManager = MeshManagerWithAssignmentForSegments.fromBlockLookup<D>(
+                    maskedSource,
+                    selectedIds,
+                    assignment,
+                    stream,
+                    viewer3D().meshesGroup(),
+                    blockLoaders,
+                    { globalCache.createNewCache(it) },
+                    meshManagerExecutorService,
+                    meshWorkerExecutorService)
+
+
+            val state: LabelSourceState<D, T>? = LabelSourceState(
+                    maskedSource,
+                    converter,
+                    ARGBCompositeAlphaYCbCr(),
+                    source.name,
+                    assignment,
+                    lockedSegments,
+                    idService,
+                    selectedIds,
+                    meshManager,
+                    lookup)
+            ListChangeListener<Source<*>> { while (it.next()) { if (it.removed.contains(source)) { assignment.close(); context.term(); sourceInfo() } } }.let {
+                this.sourceInfo().removedSourcesTracker().addListener(it)
+            }
+            this.addLabelSource(state)
         }
 
     }
@@ -302,7 +445,7 @@ class PiasOpenerDialog {
             return BiConsumer{ pbv, projectDirectory ->
                 try {
                     LOG.info("Creating and showing dialog")
-                    PiasOpenerDialog().createDialog().showAndWait()
+                    PiasOpenerDialog().showDialogAndAddIfOk(pbv, {projectDirectory})
                 } catch (e1: Exception) {
                     LOG.debug("Unable to open pias dataset", e1)
                     Exceptions.exceptionAlert(Paintera.NAME, "Unable to open pias data set", e1).show()
@@ -351,15 +494,18 @@ class UrlPromptDialog(val initialString: String?): Dialog<ButtonType>() {
 data class DataTypeOrLabelMultisetType @Throws(InvalidDataType::class) constructor(val dataType: DataType, val isLabelMultiset: Boolean) {
 
     init {
-        dataType.takeIf { validNonMultisetTypesAsSet.contains(dataType) || isLabelMultiset } ?: throw InvalidDataType(
-                dataType,
-                *validNonMultisetTypes,
-                message = "Found data type $dataType but require one of ${validNonMultisetTypesAsSet} or tag `\"isLabelMultiset\":true' in attributes.json")
+        dataType.takeIf { validNonMultisetTypesAsSet.contains(dataType) || isLabelMultiset } ?: throw exceptionFor(dataType)
     }
 
     companion object {
         val validNonMultisetTypes = arrayOf(DataType.UINT32, DataType.UINT64, DataType.INT64)
         val validNonMultisetTypesAsSet = validNonMultisetTypes.toSet()
+        fun exceptionFor(dataType: DataType) : InvalidDataType {
+            return InvalidDataType(
+                    dataType,
+                    *validNonMultisetTypes,
+                    message = "Found data type $dataType but require one of ${validNonMultisetTypesAsSet} or tag `\"isLabelMultiset\":true' in attributes.json")
+        }
     }
 
 }
@@ -368,5 +514,5 @@ fun main(args: Array<String>) {
     PlatformImpl.startup {}
     val opener = PiasOpenerDialog()
     Platform.setImplicitExit(true)
-    Platform.runLater { opener.createDialog().showAndWait() }
+//    Platform.runLater { opener.createDialog().showAndWait() }
 }
