@@ -14,7 +14,6 @@ import org.janelia.saalfeldlab.paintera.control.assignment.action.Detach
 import org.janelia.saalfeldlab.paintera.control.assignment.action.Merge
 import org.janelia.saalfeldlab.paintera.id.IdService
 import org.janelia.saalfeldlab.paintera.util.zmq.sockets.*
-import org.janelia.saalfeldlab.util.computeIfAbsent
 import org.slf4j.LoggerFactory
 import org.zeromq.ZMQ
 import java.io.Closeable
@@ -149,7 +148,10 @@ class FragmentSegmentAssignmentPias(
 //                true
 //            }
             fragmentSegment.putAll(assignments)
-            fragmentSegment.forEachEntry { k, v -> segmentFragment.computeIfAbsent(v) {TLongHashSet()}.add(k) }
+            // scoped extension functions, so cool!
+            with(TroveExtensions) {
+                fragmentSegment.forEachEntry { k, v -> segmentFragment.computeIfAbsent(v) { TLongHashSet() }.add(k) }
+            }
         }
     }
 
@@ -330,6 +332,19 @@ class FragmentSegmentAssignmentPias(
         fun setEdgeLabelsAddress(piasAddress: String) = "$piasAddress-set-edge-labels"
         fun newSolutionSubscriptionAddress(piasAddress: String) = "$piasAddress-new-solution"
         fun requestSolutionUpdateAddress(piasAddress: String) = "$piasAddress-update-solution"
+    }
+
+    private class TroveExtensions {
+
+        companion object {
+            inline fun <T> TLongObjectMap<T>.computeIfAbsent(key: Long, mappingFunction: (Long) -> T) = this[key]
+                    ?: putAndReturn(key, mappingFunction(key))
+
+            fun <T> TLongObjectMap<T>.putAndReturn(key: Long, value: T): T {
+                this.put(key, value)
+                return value
+            }
+        }
     }
 
 
