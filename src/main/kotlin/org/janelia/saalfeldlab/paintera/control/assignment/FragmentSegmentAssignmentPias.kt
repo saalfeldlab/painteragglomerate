@@ -206,7 +206,7 @@ class FragmentSegmentAssignmentPias(
     }
 
     private fun updateLookup(assignments: TLongLongHashMap) {
-        LOG.info("New lookup table arrived! {}", assignments)
+        LOG.debug("New lookup table arrived! {}", assignments)
         lookup = Lookup(assignments)
         stateChanged()
     }
@@ -223,11 +223,12 @@ class FragmentSegmentAssignmentPias(
     }
 
     private fun bytesToLookup(bytes: ByteArray) {
-        LOG.info("Received new lookup as bytes: {}", bytes)
+        LOG.trace("Received new lookup as bytes: {}", bytes)
         require(bytes.size % (1 * java.lang.Long.BYTES) == 0) {"Received byte array that is not integer multiple of long: ${bytes.size} -- ${Arrays.toString(bytes)}"}
         updateLookup(ByteBuffer.wrap(bytes).let {
             val map = TLongLongHashMap()
             (0 until bytes.size / java.lang.Long.BYTES).forEach { id -> map.put(id.toLong(), it.long) }
+            LOG.debug("Updating lookup to {}", map)
             map
         })
 
@@ -249,7 +250,7 @@ class FragmentSegmentAssignmentPias(
         socket.receiveTimeOut = recvTimeout
         val solutionRequestAddress = requestCurrentSolutionAddress()
         socket.connect(solutionRequestAddress)
-        LOG.info("Requesting current solution at {}", solutionRequestAddress)
+        LOG.debug("Requesting current solution at {}", solutionRequestAddress)
         socket.send("")
         return socket.recv()?.let {
             val responseCode = ByteBuffer.wrap(it).int

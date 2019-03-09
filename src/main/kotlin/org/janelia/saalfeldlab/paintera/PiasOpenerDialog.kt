@@ -140,8 +140,8 @@ class PiasOpenerDialog {
         resolution.addListener { _, _, newv -> newv?.let{ it.forEachIndexed { dim, res -> datasetInfo.spatialResolutionProperties()[dim].set(res) } } }
         offset.addListener { _, _, newv -> newv?.let{ it.forEachIndexed { dim, off -> datasetInfo.spatialOffsetProperties()[dim].set(off) } } }
         datasetAttributes.addListener { _, _, newv ->
-            LOG.debug("New attributes: {}", newv); dimensions.value = newv?.dimensions.let { LOG.info("Updating dimensions {}", it); it } }
-        dimensions.addListener { _, _, newv -> LOG.info("Updated dimensions to {}", newv)}
+            LOG.debug("New attributes: {}", newv); dimensions.value = newv?.dimensions.let { LOG.debug("Updating dimensions {}", it); it } }
+        dimensions.addListener { _, _, newv -> LOG.debug("Updated dimensions to {}", newv)}
     }
 
     private fun createDialog(): Dialog<ButtonType> {
@@ -179,7 +179,7 @@ class PiasOpenerDialog {
         HBox.setHgrow(containerTextField, Priority.ALWAYS)
         val content = VBox(HBox(containerTextField, connectButton), metaPanel.pane)
         dialog.dialogPane.content = content
-        LOG.info("Returning dialog with content {}", content)
+        LOG.debug("Returning dialog with content {}", content)
 
         return dialog
     }
@@ -205,7 +205,7 @@ class PiasOpenerDialog {
         val pingAddress = FragmentSegmentAssignmentPias.pingAddress(address)
         val onError: (ZMQException) -> ZMQ.Socket? = { it ->
             context.term()
-            LOG.info("Invalid address {}", address)
+            LOG.error("Invalid address {}", address)
             Exceptions.exceptionAlert("Invalid address $address", it).showAndWait()
             null }
         val timeout = 100
@@ -216,7 +216,7 @@ class PiasOpenerDialog {
             val totalWaitingTime = SimpleIntegerProperty(0)
             totalWaitingTime.addListener { _, _, newv -> InvokeOnJavaFXApplicationThread.invoke { dialog.headerText = "$baseString   ${totalWaitingTime.get().toDouble() / 1000.0}s" } }
             val pingSuccessful = SimpleBooleanProperty(false)
-            LOG.info("Pinging server at address $pingAddress")
+            LOG.debug("Pinging server at address $pingAddress")
             var wasCanceled = false
             dialog.dialogPane.lookupButton(ButtonType.OK).disableProperty().bind(pingSuccessful.not())
             val t = Thread {
@@ -246,7 +246,7 @@ class PiasOpenerDialog {
             dialog.onHidden = EventHandler { wasCanceled = true }
             t.start()
             pingSuccessful
-        } ?: ALWAYS_FALSE.let { LOG.info("Returning always false"); it }
+        } ?: ALWAYS_FALSE.let { LOG.debug("Returning always false"); it }
     }
 
 
@@ -285,9 +285,9 @@ class PiasOpenerDialog {
 
         fun n5MetaFromPiasNoThrowShowExceptions(address: String, recvTimeout: Int = -1, sendTimeout: Int = -1): N5FSMeta? {
             return try {
-                LOG.info("Trying to get n5 meta from pias at address {}", address)
+                LOG.debug("Trying to get n5 meta from pias at address {}", address)
                 val meta = n5MetaFromPias(address, recvTimeout, sendTimeout)
-                LOG.info("Got n5 meta {} from pias at address {}", meta, address)
+                LOG.debug("Got n5 meta {} from pias at address {}", meta, address)
                 meta
             } catch (e: Exception) {
                 Exceptions.exceptionAlert("Unable to retrieve data set information from PIAS at $address within ${recvTimeout}ms", e)
@@ -444,7 +444,7 @@ class PiasOpenerDialog {
         override fun onAction(): BiConsumer<PainteraBaseView, String> {
             return BiConsumer{ pbv, projectDirectory ->
                 try {
-                    LOG.info("Creating and showing dialog")
+                    LOG.debug("Creating and showing dialog")
                     PiasOpenerDialog().showDialogAndAddIfOk(pbv, {projectDirectory})
                 } catch (e1: Exception) {
                     LOG.debug("Unable to open pias dataset", e1)
