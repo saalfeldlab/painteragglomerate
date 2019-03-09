@@ -224,18 +224,11 @@ class FragmentSegmentAssignmentPias(
 
     private fun bytesToLookup(bytes: ByteArray) {
         LOG.info("Received new lookup as bytes: {}", bytes)
-        require(bytes.size % (2 * java.lang.Long.BYTES) == 0) {"Received byte array that is not integer multiple of 2 longs: ${bytes.size} -- ${Arrays.toString(bytes)}"}
+        require(bytes.size % (1 * java.lang.Long.BYTES) == 0) {"Received byte array that is not integer multiple of long: ${bytes.size} -- ${Arrays.toString(bytes)}"}
         updateLookup(ByteBuffer.wrap(bytes).let {
-            val keys = (0 until bytes.size / 2 / java.lang.Long.BYTES).map { _ -> it.long }.toLongArray()
-            val vals = (0 until bytes.size / 2 / java.lang.Long.BYTES).map { _ -> it.long }.toLongArray()
-            TLongLongHashMap(keys, vals)
-//            val map = TLongLongHashMap()
-//            while (it.hasRemaining()) {
-//                val k = it.long;
-//                val v = it.long;
-//                map.put(k, v)
-//            }
-//            map
+            val map = TLongLongHashMap()
+            (0 until bytes.size / java.lang.Long.BYTES).forEach { id -> map.put(id.toLong(), it.long) }
+            map
         })
 
     }
