@@ -1,15 +1,18 @@
 package org.janelia.saalfeldlab.paintera
 
 import javafx.scene.Node
+import javafx.scene.control.Alert
 import javafx.scene.control.Label
 import javafx.scene.control.TextField
-import javafx.scene.control.TitledPane
 import javafx.scene.layout.GridPane
 import javafx.scene.layout.Priority
+import javafx.scene.layout.VBox
+import org.janelia.saalfeldlab.fx.Buttons
 import org.janelia.saalfeldlab.fx.TitledPanes
 import org.janelia.saalfeldlab.paintera.control.selection.SelectedSegments
 import org.janelia.saalfeldlab.paintera.meshes.MeshInfos
 import org.janelia.saalfeldlab.paintera.ui.BindUnbindAndNodeSupplier
+import org.janelia.saalfeldlab.paintera.ui.PainteraAlerts
 import org.janelia.saalfeldlab.paintera.ui.source.mesh.MeshPane
 import org.janelia.saalfeldlab.paintera.ui.source.state.SourceStateUIElementsDefaultFactory
 import org.scijava.plugin.Plugin
@@ -23,7 +26,7 @@ private typealias Factory = SourceStateUIElementsDefaultFactory.AdditionalBindUn
 class LabelSourceStateAdditionalBindAndUnbindSupplierFactory : Factory {
 
     override fun create(state: PiasSourceState<*, *>): Array<BindUnbindAndNodeSupplier> {
-        return arrayOf(metaPane(state), meshPane(state))
+        return arrayOf(piasPane(state), meshPane(state))
     }
 
     override fun getTargetClass(): Class<PiasSourceState<*, *>> {
@@ -34,7 +37,7 @@ class LabelSourceStateAdditionalBindAndUnbindSupplierFactory : Factory {
 
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
 
-        private fun metaPane(state: PiasSourceState<*, *>): BindUnbindAndNodeSupplier {
+        private fun piasPane(state: PiasSourceState<*, *>): BindUnbindAndNodeSupplier {
             val address = state.piasAddress
             val container = state.meta.basePath()
             val dataset = state.meta.dataset()
@@ -53,7 +56,30 @@ class LabelSourceStateAdditionalBindAndUnbindSupplierFactory : Factory {
                 grid.add(containerField, 1, 1)
                 grid.add(datasetLabel, 0, 2)
                 grid.add(datasetField, 1, 2)
-                TitledPanes.createCollapsed("Meta", grid)
+
+                val saveGroundTruthButton = Buttons.withTooltip(
+                        "Save edge labels",
+                        "Persist ground truth edge labels. " +
+                                "Persisted labels will be available at next start of PIAS. " +
+                                "Previous saved state will be backed up.") {
+                    val success = state.assignment.persistGroundTruthLabels(
+                            recvTimeout = state.recvTimeoutMillis,
+                            sendTimeout = state.sendTimeoutMillis)
+                    val dialog = if (success.first && success.second is Int)
+                        PainteraAlerts.alert(Alert.AlertType.INFORMATION).let {
+                            it.headerText = "Persisted ground truth labels"
+                            it.contentText = if (success.second == 1) "No(t enough) labels provided yet" else "Success"
+                            it }
+                    else
+                        PainteraAlerts.alert(Alert.AlertType.ERROR).let {
+                            it.headerText = "Unable to persist ground truth labels"
+                            it.contentText = "${success.second}"
+                            it }
+                    dialog.show()
+                }
+                saveGroundTruthButton.maxWidth = Double.MAX_VALUE
+
+                TitledPanes.createCollapsed("PIAS", VBox(grid, saveGroundTruthButton))
             }
             return BindUnbindAndNodeSupplier.noBind(nodeSupplier)
         }

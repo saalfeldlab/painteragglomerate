@@ -222,6 +222,37 @@ class FragmentSegmentAssignmentPias(
         return socket.recvStr(Charset.defaultCharset()).let { LOG.debug("Received pong from {}: `{}'", pingAddress, it); it }
     }
 
+    fun persistGroundTruthLabels(recvTimeout: Int = -1, sendTimeout: Int = -1): Pair<Boolean, Any?> {
+        return clientSocket(context, apiAddress(), receiveTimeout = recvTimeout, sendTimeout = sendTimeout).use {
+            it.send("/api/save-ground-truth-labels")
+            val success = it.recv()?.toInt()
+            val numMessages = it.recv()?.toInt()
+            if (numMessages == 0 || numMessages == null)
+                Pair(false, null)
+            else if (success == 0 && numMessages == 1) {
+                val messageType = it.recv()?.toInt()
+                val message = it.recv()
+                // 2 is type int, 0 is type string
+                if (messageType == 2)
+                    Pair(true, message?.toInt())
+                else
+                    Pair(false, message?.takeIf { messageType == 0 }?.let { String(it) } ?: message)
+            } else {
+                val messages = (0 until numMessages).map {_ ->
+                    val messageType = it.recv()?.toInt()
+                    it.recv()?.let { message ->
+                        when (messageType) {
+                            0 -> String(message)
+                            2 -> message.toInt()
+                            else -> message
+                        }
+                    }
+                }
+                Pair(false, messages)
+            }
+        }
+    }
+
     private fun bytesToLookup(bytes: ByteArray) {
         LOG.trace("Received new lookup as bytes: {}", bytes)
         require(bytes.size % (1 * java.lang.Long.BYTES) == 0) {"Received byte array that is not integer multiple of long: ${bytes.size} -- ${Arrays.toString(bytes)}"}
@@ -310,6 +341,7 @@ class FragmentSegmentAssignmentPias(
     fun setEdgeLabelsAddress() = "$piasAddress-set-edge-labels"
     fun newSolutionSubscriptionAddress() = "$piasAddress-new-solution"
     fun requestSolutionUpdateAddress() = "$piasAddress-update-solution"
+    fun apiAddress() = apiAddress(piasAddress)
 
     companion object {
         private val LOG = LoggerFactory.getLogger(MethodHandles.lookup().lookupClass())
@@ -326,6 +358,7 @@ class FragmentSegmentAssignmentPias(
         fun setEdgeLabelsAddress(piasAddress: String) = "$piasAddress-set-edge-labels"
         fun newSolutionSubscriptionAddress(piasAddress: String) = "$piasAddress-new-solution"
         fun requestSolutionUpdateAddress(piasAddress: String) = "$piasAddress-update-solution"
+        fun apiAddress(piasAddress: String) = piasAddress
     }
 
     private class TroveExtensions {
