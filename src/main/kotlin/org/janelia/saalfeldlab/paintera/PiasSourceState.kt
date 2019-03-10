@@ -13,8 +13,12 @@ import javafx.scene.input.KeyEvent
 import net.imglib2.Interval
 import net.imglib2.realtransform.AffineTransform3D
 import net.imglib2.type.NativeType
+import net.imglib2.type.label.LabelMultisetType
 import net.imglib2.type.numeric.ARGBType
 import net.imglib2.type.numeric.IntegerType
+import net.imglib2.type.numeric.integer.LongType
+import net.imglib2.type.numeric.integer.UnsignedIntType
+import net.imglib2.type.numeric.integer.UnsignedLongType
 import org.janelia.saalfeldlab.fx.event.DelegateEventHandlers
 import org.janelia.saalfeldlab.fx.event.EventFX
 import org.janelia.saalfeldlab.fx.event.KeyTracker
@@ -46,6 +50,7 @@ import org.zeromq.ZMQ
 import java.io.Closeable
 import java.lang.invoke.MethodHandles
 import java.util.function.Consumer
+import kotlin.reflect.KClass
 
 class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
         val piasAddress: String,
@@ -58,6 +63,26 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
         val recvTimeoutMillis: Int = 500,
         val sendTimeoutMillis: Int = 500):
         SourceState<D, T>, Closeable  where D : IntegerType<D>, D: NativeType<D>, T: NativeType<T> {
+
+    enum class CompatibleType(private val nativeType: KClass<out NativeType<*>>) {
+        LABEL_MULTISETS(LabelMultisetType::class),
+        UINT32(UnsignedIntType::class),
+        UINT64(UnsignedLongType::class),
+        INT64(LongType::class);
+
+        class IncompatibleType(val type: KClass<out NativeType<*>>, message: String? = "$type not copmatible with any of $valuesAsSet") : PainteraException(message)
+
+        companion object {
+
+            @Throws(IncompatibleType::class)
+            fun fromType(nativeType: NativeType<*>) = nativeTypeMapping[nativeType::class] ?: throw IncompatibleType(nativeType::class)
+
+            private val valuesAsSet = values().toSet()
+
+            private val nativeTypeMapping = values().map { Pair(it.nativeType, it) }.toMap()
+        }
+
+    }
 
     val context = ZMQ.context(ioThreads)
 
@@ -74,6 +99,7 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
     val converter: HighlightingStreamConverter<T>
     val lookup: LabelBlockLookup
     val meshManager: MeshManagerWithAssignmentForSegments
+    val type: CompatibleType
 
     private val composite: ObjectProperty<Composite<ARGBType, ARGBType>> = SimpleObjectProperty(ARGBCompositeAlphaYCbCr())
     private val interpolation = SimpleObjectProperty(Interpolation.NEARESTNEIGHBOR)
@@ -104,6 +130,7 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
                     paintera.globalCache,
                     0,
                     name)
+            this.type = CompatibleType.fromType(unmaskedSource.dataType)
             // currently no masked source supported, TODO add later
             this.source = unmaskedSource
 //            this.source = Masks.mask(unmaskedSource, null, )

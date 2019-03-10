@@ -61,7 +61,7 @@ class LabelSourceStateAdditionalBindAndUnbindSupplierFactory : Factory {
                         "Save edge labels",
                         "Persist ground truth edge labels. " +
                                 "Persisted labels will be available at next start of PIAS. " +
-                                "Previous saved state will be backed up.") {
+                                "Previously saved state will be backed up.") {
                     val success = state.assignment.persistGroundTruthLabels(
                             recvTimeout = state.recvTimeoutMillis,
                             sendTimeout = state.sendTimeoutMillis)
