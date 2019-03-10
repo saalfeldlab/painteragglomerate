@@ -27,6 +27,7 @@ import org.janelia.saalfeldlab.paintera.control.lock.LockedSegmentsOnlyLocal
 import org.janelia.saalfeldlab.paintera.control.selection.SelectedIds
 import org.janelia.saalfeldlab.paintera.data.DataSource
 import org.janelia.saalfeldlab.paintera.data.axisorder.AxisOrder
+import org.janelia.saalfeldlab.paintera.data.n5.N5FSMeta
 import org.janelia.saalfeldlab.paintera.exception.PainteraException
 import org.janelia.saalfeldlab.paintera.id.IdService
 import org.janelia.saalfeldlab.paintera.meshes.InterruptibleFunction
@@ -63,6 +64,7 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
     private val ping = PiasPing(context, piasAddress, recvTimeoutMillis, sendTimeoutMillis)
 
 
+    val meta: N5FSMeta
     val source: DataSource<D, T>
     val selectedIds: SelectedIds = SelectedIds()
     val lockedSegments = LockedSegmentsOnlyLocal(Consumer {})
@@ -94,7 +96,7 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
                 else
                     LOG.error("Unable to ping server in {} seconds", (ping.lastSuccessfulPingProperty().value - System.nanoTime()) * 1e-9)
             }
-            val meta = PiasContainer.n5MetaFromPias(context, piasAddress, recvTimeoutMillis, sendTimeoutMillis)!!
+            this.meta = PiasContainer.n5MetaFromPias(context, piasAddress, recvTimeoutMillis, sendTimeoutMillis)!!
             val unmaskedSource = N5Data.openAsLabelSource<D, T>(
                     meta.writer(),
                     meta.dataset(),
