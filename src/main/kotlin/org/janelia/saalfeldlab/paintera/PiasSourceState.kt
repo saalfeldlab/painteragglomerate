@@ -138,6 +138,8 @@ class PiasSourceState<D, T> @Throws(DidNotReachPias::class) constructor(
                     paintera.meshManagerExecutorService,
                     paintera.meshWorkerExecutorService)
 
+            this.assignment.updateSolution(recvTimeout = recvTimeoutMillis, sendTimeout = sendTimeoutMillis)
+
 
         } catch (e: Exception) {
             Exceptions.exceptionAlert("Unable to create pias source", e)
