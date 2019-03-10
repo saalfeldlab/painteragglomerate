@@ -26,7 +26,10 @@ import javafx.scene.layout.Priority
 import javafx.scene.layout.VBox
 import net.imglib2.Interval
 import net.imglib2.realtransform.AffineTransform3D
+import net.imglib2.type.NativeType
 import net.imglib2.type.Type
+import net.imglib2.type.label.LabelMultisetType
+import net.imglib2.type.label.VolatileLabelMultisetType
 import net.imglib2.type.numeric.IntegerType
 import net.imglib2.type.numeric.integer.LongType
 import net.imglib2.type.numeric.integer.UnsignedIntType
@@ -40,6 +43,7 @@ import org.janelia.saalfeldlab.n5.DataType
 import org.janelia.saalfeldlab.n5.DatasetAttributes
 import org.janelia.saalfeldlab.n5.N5Reader
 import org.janelia.saalfeldlab.n5.N5Writer
+import org.janelia.saalfeldlab.paintera.PiasOpenerDialog.Companion.addPiasSource
 import org.janelia.saalfeldlab.paintera.composition.ARGBCompositeAlphaYCbCr
 import org.janelia.saalfeldlab.paintera.control.assignment.FragmentSegmentAssignmentPias
 import org.janelia.saalfeldlab.paintera.control.lock.LockedSegmentsOnlyLocal
@@ -187,16 +191,19 @@ class PiasOpenerDialog {
     fun showDialogAndAddIfOk(paintera: PainteraBaseView, projectDirectory: () -> String?) {
         val dialog = createDialog()
         if (dialog.showAndWait().filter { ButtonType.OK.equals(it) }.isPresent) {
-            paintera.addPiasSource(
-                    dataType.value!!,
-                    n5.value!!,
-                    dataset.value!!,
-                    datasetInfo.spatialResolutionProperties().map { it.value }.toDoubleArray(),
-                    datasetInfo.spatialOffsetProperties().map { it.value }.toDoubleArray(),
-                    "PIAS",
-                    ioThreads = IO_THREADS,
-                    projectDirectory = projectDirectory,
-                    piasAddress = address.value)
+            val dataType = this.dataType.get()!!
+            val resolution = datasetInfo.spatialResolutionProperties().map { it.value }.toDoubleArray()
+            val offset = datasetInfo.spatialOffsetProperties().map { it.value }.toDoubleArray()
+            if (dataType.isLabelMultiset) {
+                paintera.addPiasSource<LabelMultisetType, VolatileLabelMultisetType>(address.get(), "PIAS", resolution, offset, projectDirectory, ioThreads = 3)
+            } else {
+                when (dataType.dataType) {
+                    DataType.UINT32 -> paintera.addPiasSource<UnsignedIntType, VolatileUnsignedIntType>(address.get(), "PIAS", resolution, offset, projectDirectory, ioThreads = 3)
+                    DataType.UINT64 -> paintera.addPiasSource<UnsignedLongType, VolatileUnsignedLongType>(address.get(), "PIAS", resolution, offset, projectDirectory, ioThreads = 3)
+                    DataType.INT64 -> paintera.addPiasSource<LongType, VolatileLongType>(address.get(), "PIAS", resolution, offset, projectDirectory, ioThreads = 3)
+                    else -> throw DataTypeOrLabelMultisetType.exceptionFor(dataType.dataType)
+                }
+            }
         }
     }
 
@@ -347,93 +354,18 @@ class PiasOpenerDialog {
             return this
         }
 
-        @Throws(InvalidDataType::class)
-        private fun PainteraBaseView.addPiasSource(
-                dataType: DataTypeOrLabelMultisetType,
-                container: N5Writer,
-                dataset: String,
+        @Throws (InvalidDataType::class)
+        private fun <D, T> PainteraBaseView.addPiasSource(
+                address: String,
+                name: String,
                 resolution: DoubleArray,
                 offset: DoubleArray,
-                name: String,
-                piasAddress: String,
                 projectDirectory: () -> String?,
-                ioThreads: Int = IO_THREADS
-        ) {
-            val tf = AffineTransform3D().fromResolutionAndOffset(resolution = resolution, offset = offset)
-            val cache = globalCache
-            if (dataType.isLabelMultiset) {
-                addPiasSource(N5Data.openLabelMultisetAsSource(container, dataset, tf, globalCache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
-            } else {
+                ioThreads: Int
+        ) where D: IntegerType<D>, D: NativeType<D>, T: NativeType<T> {
 
-                when (dataType.dataType) {
-                    DataType.UINT32 -> addPiasSource(N5Data.openScalarAsSource<UnsignedIntType, VolatileUnsignedIntType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
-                    DataType.UINT64 -> addPiasSource(N5Data.openScalarAsSource<UnsignedLongType, VolatileUnsignedLongType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
-                    DataType.INT64 -> addPiasSource(N5Data.openScalarAsSource<LongType, VolatileLongType>(container, dataset, tf, cache, 0, name), container, dataset, piasAddress, projectDirectory, ioThreads)
-                    else -> throw DataTypeOrLabelMultisetType.exceptionFor(dataType.dataType)
-                }
-            }
-
-        }
-
-        private fun <D: IntegerType<D>, T: Type<T>> PainteraBaseView.addPiasSource(
-                source: DataSource<D, T>,
-                container: N5Writer,
-                dataset: String,
-                piasAddress: String,
-                projectDirectory: () -> String?,
-                ioThreads: Int = IO_THREADS
-        ) {
-            val context = ZMQ.context(ioThreads)
-            val idService = N5Helpers.idService(container, dataset)
-            val selectedIds = SelectedIds()
-            val assignment = FragmentSegmentAssignmentPias(piasAddress = piasAddress, context = context, idService = idService)
-            val lockedSegments = LockedSegmentsOnlyLocal(Consumer{})
-            val stream = ModalGoldenAngleSaturatedHighlightingARGBStream(selectedIds, assignment, lockedSegments)
-            val converter = HighlightingStreamConverter.forType(stream, source.type)
-
-            val nextCanvas = Supplier { ( projectDirectory()?.let { Paths.get(it, "canvases").let { it.toFile().mkdirs(); Files.createTempDirectory(it, "canvas-") } } ?: Files.createTempDirectory("canvas-")).toAbsolutePath().toString()}
-            // TODO use CommitCanvas that updates edge features!!!
-            val maskedSource = Masks.mask(source, null, nextCanvas, CommitCanvasN5(container, dataset), this.propagationQueue)
-
-
-            val lookup = N5Helpers.getLabelBlockLookup(container, dataset)
-
-            val loaderForLevelFactory = { level: Int ->
-                InterruptibleFunction.fromFunction(
-                        MakeUnchecked.function<Long, Array<Interval>>(
-                                { id -> lookup.read(level, id!!) },
-                                { id -> LOG.debug("Falling back to empty array"); arrayOf() }))
-            }
-
-            val blockLoaders = (0 until maskedSource.numMipmapLevels).map { loaderForLevelFactory(it) }.toTypedArray()
-
-            val meshManager = MeshManagerWithAssignmentForSegments.fromBlockLookup<D>(
-                    maskedSource,
-                    selectedIds,
-                    assignment,
-                    stream,
-                    viewer3D().meshesGroup(),
-                    blockLoaders,
-                    { globalCache.createNewCache(it) },
-                    meshManagerExecutorService,
-                    meshWorkerExecutorService)
-
-
-            val state: LabelSourceState<D, T>? = LabelSourceState(
-                    maskedSource,
-                    converter,
-                    ARGBCompositeAlphaYCbCr(),
-                    source.name,
-                    assignment,
-                    lockedSegments,
-                    idService,
-                    selectedIds,
-                    meshManager,
-                    lookup)
-            ListChangeListener<Source<*>> { while (it.next()) { if (it.removed.contains(source)) { assignment.close(); context.term(); sourceInfo() } } }.let {
-                this.sourceInfo().removedSourcesTracker().addListener(it)
-            }
-            this.addLabelSource(state)
+            val state = PiasSourceState<D, T>(address, name, resolution, offset, this, projectDirectory, ioThreads = ioThreads)
+            addState(state)
         }
 
     }
